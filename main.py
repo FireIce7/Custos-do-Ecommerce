@@ -2,7 +2,6 @@ from asteval import Interpreter
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy import create_engine, Column, Integer, String, Float
 import streamlit as st
-```python
 # main.py
 # Streamlit App Profissional para Custos & Lucro
 
@@ -155,4 +154,3 @@ if page == 'Variáveis de Produção':
         else:
             st.info('Nenhuma variável cadastrada.')
     st.markdown('</div>', unsafe_allow_html=True)
-```
