@@ -3,24 +3,21 @@ from sqlalchemy import create_engine, Column, Integer, String, Float
 from sqlalchemy.orm import sessionmaker, declarative_base
 from asteval import Interpreter
 
-# --- Configurações iniciais ---
+# --- Configuração de página e CSS ---
 st.set_page_config(page_title="Custos & Lucro", layout="wide")
 st.markdown(
     '''<style>
-    /* Sidebar styling */
-    .sidebar .sidebar-content { background-color: #f0f2f6; }
-    /* Card styling */
-    .card { background: #fff; padding: 20px; border-radius: 8px;
-             box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
-    /* Button styling */
-    .btn-full { width: 100%; padding: 12px 0; font-size: 16px; margin-bottom: 10px; }
-    /* Title styling */
-    .title { text-align: center; margin: 25px 0; }
+    body { background-color: #0e1117; color: #e1e1e1; }
+    .card { background: #1e1e24; padding: 20px; border-radius: 8px;
+             box-shadow: 0 2px 8px rgba(0,0,0,0.5); margin-bottom: 20px; }
+    .title { text-align: center; margin: 30px 0; font-size: 2.5rem; }
+    .btn { width: 100%; padding: 14px 0; font-size: 1.1rem; margin-bottom: 10px; }
+    .stTextInput>div>div>input, .stNumberInput>div>div>input { background: #2e2e36; color: #fff; }
     </style>''',
     unsafe_allow_html=True
 )
 
-# --- Banco de dados SQLite (dev) ---
+# --- Banco de dados SQLite (desenvolvimento) ---
 engine = create_engine('sqlite:///database.db', echo=False)
 Session = sessionmaker(bind=engine)
 Base = declarative_base()
@@ -45,7 +42,7 @@ class Produto(Base):
 
 Base.metadata.create_all(engine)
 
-# --- CRUD & cálculo ---
+# --- Funções CRUD e cálculo ---
 
 
 def get_variaveis():
@@ -59,6 +56,22 @@ def add_variavel(nome, valor):
         s.commit()
 
 
+def update_variavel(var_id, nome, valor):
+    with Session() as s:
+        var = s.get(Variavel, var_id)
+        var.nome = nome
+        var.valor = valor
+        s.commit()
+
+
+def delete_variavel(var_id):
+    with Session() as s:
+        var = s.get(Variavel, var_id)
+        if var:
+            s.delete(var)
+            s.commit()
+
+
 def get_produtos():
     with Session() as s:
         return s.query(Produto).all()
@@ -70,6 +83,22 @@ def add_produto(nome, formula):
         s.commit()
 
 
+def update_produto(prod_id, nome, formula):
+    with Session() as s:
+        prod = s.get(Produto, prod_id)
+        prod.nome = nome
+        prod.formula = formula
+        s.commit()
+
+
+def delete_produto(prod_id):
+    with Session() as s:
+        prod = s.get(Produto, prod_id)
+        if prod:
+            s.delete(prod)
+            s.commit()
+
+
 def evaluate_formula(formula):
     for v in get_variaveis():
         ae.symtable[v.nome] = v.valor
@@ -79,97 +108,155 @@ def evaluate_formula(formula):
         return None
 
 
-# --- Inicializa página ---
+# --- Estado de navegação e edição ---
 if 'page' not in st.session_state:
     st.session_state.page = 'menu'
+if 'edit_var' not in st.session_state:
+    st.session_state.edit_var = None
+if 'edit_prod' not in st.session_state:
+    st.session_state.edit_prod = None
+
+# --- Função para trocar de página ---
+
+
+def go(page_name):
+    st.session_state.page = page_name
+    st.session_state.edit_var = None
+    st.session_state.edit_prod = None
+
 
 # --- Menu Inicial ---
 if st.session_state.page == 'menu':
-    st.markdown('<h1 class="title">📋 Menu Inicial</h1>',
+    st.markdown('<div class="title">📋 Menu Inicial</div>',
                 unsafe_allow_html=True)
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    if st.button('💰 Ir para Custos de Produção', key='menu_custos', args=None):
-        st.session_state.page = 'custos'
-    st.markdown('</div>', unsafe_allow_html=True)
+    c1, c2, c3 = st.columns([1, 2, 1])
+    with c2:
+        if st.button('💰 Ir para Custos de Produção', key='menu_custos', help='Clique para ver custos'):
+            go('custos')
 
-# --- Página: Custos de Produção ---
+# --- Custos de Produção ---
 elif st.session_state.page == 'custos':
-    st.markdown('<h2 class="title">🧮 Custos de Produção</h2>',
+    st.markdown('<div class="title">🧮 Custos de Produção</div>',
                 unsafe_allow_html=True)
-    cols = st.columns([1, 3])
-    with cols[0]:  # Navegação lateral
+    left, right = st.columns([1, 3])
+    with left:
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.button('➕ Criar Novo Produto', key='goto_add_prod',
-                  on_click=lambda: st.session_state.update(page='add_produto'), args=None)
-        st.button('📦 Ver Variáveis de Produção', key='goto_vars',
-                  on_click=lambda: st.session_state.update(page='variaveis'), args=None)
-        st.button('🔙 Voltar ao Menu', key='back_menu',
-                  on_click=lambda: st.session_state.update(page='menu'), args=None)
+        if st.button('➕ Novo Produto', key='btn_new_prod', help='Criar novo produto'):
+            go('add_produto')
+        st.markdown('---')
+        if st.button('🔙 Voltar ao Menu', key='btn_back_menu'):
+            go('menu')
         st.markdown('</div>', unsafe_allow_html=True)
-    with cols[1]:  # Conteúdo principal
+    with right:
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        produtos = get_produtos()
-        if produtos:
-            for p in produtos:
-                val = evaluate_formula(p.formula)
-                st.write(f"**{p.nome}** → `{p.formula}` = **{val}**")
+        prods = get_produtos()
+        if prods:
+            for p in prods:
+                cols = st.columns([4, 1, 1])
+                with cols[0]:
+                    val = evaluate_formula(p.formula)
+                    st.write(f"**{p.nome}** → `{p.formula}` = **{val}**")
+                with cols[1]:
+                    if st.button('✏️', key=f'edit_prod_{p.id}'):
+                        st.session_state.edit_prod = p.id
+                        go('add_produto')
+                with cols[2]:
+                    if st.button('🗑️', key=f'del_prod_{p.id}'):
+                        delete_produto(p.id)
+                        st.experimental_rerun()
         else:
-            st.info("Nenhum produto cadastrado.")
+            st.info('Nenhum produto cadastrado.')
         st.markdown('</div>', unsafe_allow_html=True)
 
-# --- Página: Adicionar Produto ---
+# --- Adicionar / Editar Produto ---
 elif st.session_state.page == 'add_produto':
-    st.markdown('<h2 class="title">➕ Novo Produto</h2>',
+    st.markdown('<div class="title">➕ Novo Produto</div>',
                 unsafe_allow_html=True)
-    cols = st.columns([1, 3])
-    with cols[0]:
+    left, right = st.columns([1, 3])
+    # Preencher campos se editando
+    if st.session_state.edit_prod:
+        prod = next((x for x in get_produtos() if x.id ==
+                    st.session_state.edit_prod), None)
+        default_name = prod.nome
+        default_formula = prod.formula
+    else:
+        default_name = ''
+        default_formula = ''
+    with left:
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        nome = st.text_input('Nome do Produto', key='new_prod_name')
+        name = st.text_input(
+            'Nome do Produto', value=default_name, key='prod_name')
         formula = st.text_input(
-            'Fórmula (Var1*(Var2+Var3))', key='new_prod_formula')
+            'Fórmula (Var1*(Var2+Var3))', value=default_formula, key='prod_formula')
         if st.button('💾 Salvar Produto', key='save_prod'):
-            if nome and formula:
-                add_produto(nome, formula)
-                st.success('Produto salvo com sucesso!')
-                st.session_state.page = 'custos'
+            if name and formula:
+                if st.session_state.edit_prod:
+                    update_produto(st.session_state.edit_prod, name, formula)
+                else:
+                    add_produto(name, formula)
+                go('custos')
+                st.experimental_rerun()
             else:
                 st.error('Preencha nome e fórmula.')
-        st.button('🔙 Voltar a Custos', key='back_to_custos',
-                  on_click=lambda: st.session_state.update(page='custos'), args=None)
+        if st.button('🔙 Cancelar', key='cancel_prod'):
+            go('custos')
         st.markdown('</div>', unsafe_allow_html=True)
-    with cols[1]:
+    with right:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader('Variáveis Disponíveis')
         for v in get_variaveis():
             st.write(f"- **{v.nome}** = {v.valor}")
         st.markdown('</div>', unsafe_allow_html=True)
 
-# --- Página: Variáveis de Produção ---
+# --- Variáveis de Produção ---
 elif st.session_state.page == 'variaveis':
-    st.markdown('<h2 class="title">📦 Variáveis de Produção</h2>',
+    st.markdown('<div class="title">📦 Variáveis de Produção</div>',
                 unsafe_allow_html=True)
-    cols = st.columns([1, 3])
-    with cols[0]:
+    left, right = st.columns([1, 3])
+    # Preencher campos se editando
+    if st.session_state.edit_var:
+        var = next((x for x in get_variaveis() if x.id ==
+                   st.session_state.edit_var), None)
+        default_name = var.nome
+        default_val = var.valor
+    else:
+        default_name = ''
+        default_val = 0.0
+    with left:
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        nome = st.text_input('Nome da Variável', key='new_var_name')
-        valor = st.number_input('Valor', format='%.2f', key='new_var_value')
+        name = st.text_input('Nome da Variável',
+                             value=default_name, key='var_name')
+        val = st.number_input('Valor', value=default_val,
+                              format='%.2f', key='var_value')
         if st.button('💾 Salvar Variável', key='save_var'):
-            if nome:
-                add_variavel(nome, valor)
-                st.success('Variável salva com sucesso!')
-                st.session_state.page = 'custos'
+            if name:
+                if st.session_state.edit_var:
+                    update_variavel(st.session_state.edit_var, name, val)
+                else:
+                    add_variavel(name, val)
+                go('custos')
+                st.experimental_rerun()
             else:
                 st.error('Informe um nome.')
-        st.button('🔙 Voltar a Custos', key='back_to_custos2',
-                  on_click=lambda: st.session_state.update(page='custos'), args=None)
+        if st.button('🔙 Cancelar', key='cancel_var'):
+            go('custos')
         st.markdown('</div>', unsafe_allow_html=True)
-    with cols[1]:
+    with right:
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.subheader('Lista de Variáveis')
-        vars_list = get_variaveis()
-        if vars_list:
-            for v in vars_list:
-                st.write(f"**{v.nome}** → {v.valor}")
+        vars_ = get_variaveis()
+        if vars_:
+            for v in vars_:
+                cols = st.columns([4, 1, 1])
+                with cols[0]:
+                    st.write(f"**{v.nome}** → {v.valor}")
+                with cols[1]:
+                    if st.button('✏️', key=f'edit_var_{v.id}'):
+                        st.session_state.edit_var = v.id
+                        go('variaveis')
+                with cols[2]:
+                    if st.button('🗑️', key=f'del_var_{v.id}'):
+                        delete_variavel(v.id)
+                        st.experimental_rerun()
         else:
             st.info('Nenhuma variável cadastrada.')
         st.markdown('</div>', unsafe_allow_html=True)
