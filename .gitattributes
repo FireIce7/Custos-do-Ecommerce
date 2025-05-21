@@ -1,3 +1,27 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Byte-compiled / cache files
+__pycache__/
+*.py[cod]
+
+# Distribuição / build
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Ambientes virtuais
 venv/
+.env/
+env/
+.venv/
+
+# Banco de dados SQLite (runtime)
+database.db
+
+# Configurações do Streamlit
+.streamlit/
+
+# Editor / IDE\ n.vscode/
+.idea/
+
+# Arquivos de sistema\ n.DS_Store
+Thumbs.db
