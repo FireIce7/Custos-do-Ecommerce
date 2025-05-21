@@ -3,27 +3,28 @@ from sqlalchemy import create_engine, Column, Integer, String, Float
 from sqlalchemy.orm import sessionmaker, declarative_base
 from asteval import Interpreter
 
-# --- Configuração de página e CSS ---
+# --- Configurações de Página e CSS ---
 st.set_page_config(page_title="Custos & Lucro", layout="wide")
 st.markdown(
     '''<style>
-    body { background-color: #0e1117; color: #e1e1e1; }
-    .card { background: #1e1e24; padding: 20px; border-radius: 8px;
-             box-shadow: 0 2px 8px rgba(0,0,0,0.5); margin-bottom: 20px; }
+    body { background-color: #0e1117; color: #f0f0f5; }
     .title { text-align: center; margin: 30px 0; font-size: 2.5rem; }
-    .btn { width: 100%; padding: 14px 0; font-size: 1.1rem; margin-bottom: 10px; }
-    .stTextInput>div>div>input, .stNumberInput>div>div>input { background: #2e2e36; color: #fff; }
+    .center-btn { display: flex; justify-content: center; margin: 20px 0; }
+    .stButton>button { padding: 12px 24px; font-size: 1rem; }
+    .card { background: #1e1e28; padding: 20px; border-radius: 8px;
+             box-shadow: 0 2px 8px rgba(0,0,0,0.5); margin-bottom: 20px; }
+    .input-bar > div { background: transparent; margin-bottom: 10px; }
     </style>''',
     unsafe_allow_html=True
 )
 
-# --- Banco de dados SQLite (desenvolvimento) ---
+# --- Banco de Dados SQLite ---
 engine = create_engine('sqlite:///database.db', echo=False)
 Session = sessionmaker(bind=engine)
 Base = declarative_base()
 ae = Interpreter()
 
-# --- Modelos ---
+# --- Modelos ORM ---
 
 
 class Variavel(Base):
@@ -42,7 +43,7 @@ class Produto(Base):
 
 Base.metadata.create_all(engine)
 
-# --- Funções CRUD e cálculo ---
+# --- Funções CRUD & Cálculo ---
 
 
 def get_variaveis():
@@ -59,8 +60,7 @@ def add_variavel(nome, valor):
 def update_variavel(var_id, nome, valor):
     with Session() as s:
         var = s.get(Variavel, var_id)
-        var.nome = nome
-        var.valor = valor
+        var.nome, var.valor = nome, valor
         s.commit()
 
 
@@ -86,8 +86,7 @@ def add_produto(nome, formula):
 def update_produto(prod_id, nome, formula):
     with Session() as s:
         prod = s.get(Produto, prod_id)
-        prod.nome = nome
-        prod.formula = formula
+        prod.nome, prod.formula = nome, formula
         s.commit()
 
 
@@ -108,155 +107,128 @@ def evaluate_formula(formula):
         return None
 
 
-# --- Estado de navegação e edição ---
+# --- Estado de Navegação e Edição ---
 if 'page' not in st.session_state:
     st.session_state.page = 'menu'
-if 'edit_var' not in st.session_state:
-    st.session_state.edit_var = None
-if 'edit_prod' not in st.session_state:
-    st.session_state.edit_prod = None
+if 'edit_id' not in st.session_state:
+    st.session_state.edit_id = None
 
 # --- Função para trocar de página ---
 
 
-def go(page_name):
-    st.session_state.page = page_name
-    st.session_state.edit_var = None
-    st.session_state.edit_prod = None
+def go(page, edit_id=None):
+    st.session_state.page = page
+    st.session_state.edit_id = edit_id
+    st.experimental_rerun()
 
 
-# --- Menu Inicial ---
+# --- MENU INICIAL ---
 if st.session_state.page == 'menu':
     st.markdown('<div class="title">📋 Menu Inicial</div>',
                 unsafe_allow_html=True)
-    c1, c2, c3 = st.columns([1, 2, 1])
-    with c2:
-        if st.button('💰 Ir para Custos de Produção', key='menu_custos', help='Clique para ver custos'):
-            go('custos')
+    # Botão centralizado
+    if st.button('💰 Ir para Custos de Produção', key='btn_menu_custos'):
+        go('custos')
 
-# --- Custos de Produção ---
+# --- CUSTOS DE PRODUÇÃO ---
 elif st.session_state.page == 'custos':
     st.markdown('<div class="title">🧮 Custos de Produção</div>',
                 unsafe_allow_html=True)
-    left, right = st.columns([1, 3])
-    with left:
+    cols = st.columns([1, 3])
+    with cols[0]:  # Ações lateral
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        if st.button('➕ Novo Produto', key='btn_new_prod', help='Criar novo produto'):
-            go('add_produto')
+        if st.button('➕ Novo Produto', key='btn_new_prod'):
+            go('produto')
         st.markdown('---')
         if st.button('🔙 Voltar ao Menu', key='btn_back_menu'):
             go('menu')
         st.markdown('</div>', unsafe_allow_html=True)
-    with right:
+    with cols[1]:  # Lista de produtos
         st.markdown('<div class="card">', unsafe_allow_html=True)
         prods = get_produtos()
         if prods:
             for p in prods:
-                cols = st.columns([4, 1, 1])
-                with cols[0]:
-                    val = evaluate_formula(p.formula)
-                    st.write(f"**{p.nome}** → `{p.formula}` = **{val}**")
-                with cols[1]:
-                    if st.button('✏️', key=f'edit_prod_{p.id}'):
-                        st.session_state.edit_prod = p.id
-                        go('add_produto')
-                with cols[2]:
-                    if st.button('🗑️', key=f'del_prod_{p.id}'):
-                        delete_produto(p.id)
-                        st.experimental_rerun()
+                colp = st.columns([4, 1, 1])
+                colp[0].write(
+                    f"**{p.nome}** → `{p.formula}` = **{evaluate_formula(p.formula)}`")
+                if colp[1].button('✏️', key=f'prod_edit_{p.id}'):
+                    go('produto', p.id)
+                if colp[2].button('🗑️', key=f'prod_del_{p.id}'):
+                    delete_produto(p.id)
+                    go('custos')
         else:
             st.info('Nenhum produto cadastrado.')
         st.markdown('</div>', unsafe_allow_html=True)
 
-# --- Adicionar / Editar Produto ---
-elif st.session_state.page == 'add_produto':
-    st.markdown('<div class="title">➕ Novo Produto</div>',
-                unsafe_allow_html=True)
-    left, right = st.columns([1, 3])
-    # Preencher campos se editando
-    if st.session_state.edit_prod:
-        prod = next((x for x in get_produtos() if x.id ==
-                    st.session_state.edit_prod), None)
-        default_name = prod.nome
-        default_formula = prod.formula
+# --- PRODUTO (Adicionar/Editar) ---
+elif st.session_state.page == 'produto':
+    edit = st.session_state.edit_id
+    if edit:
+        prod = next((x for x in get_produtos() if x.id == edit), None)
+        default_name, default_form = prod.nome, prod.formula
     else:
-        default_name = ''
-        default_formula = ''
-    with left:
+        default_name, default_form = '', ''
+    st.markdown(
+        f'<div class="title">{"✏️ Editar Produto" if edit else "➕ Novo Produto"}</div>', unsafe_allow_html=True)
+    cols = st.columns([1, 3])
+    with cols[0]:
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        name = st.text_input(
-            'Nome do Produto', value=default_name, key='prod_name')
-        formula = st.text_input(
-            'Fórmula (Var1*(Var2+Var3))', value=default_formula, key='prod_formula')
-        if st.button('💾 Salvar Produto', key='save_prod'):
-            if name and formula:
-                if st.session_state.edit_prod:
-                    update_produto(st.session_state.edit_prod, name, formula)
+        name = st.text_input('Nome', value=default_name, key='prod_name')
+        form = st.text_input('Fórmula', value=default_form, key='prod_formula')
+        if st.button('💾 Salvar', key='btn_save_prod'):
+            if name and form:
+                if edit:
+                    update_produto(edit, name, form)
                 else:
-                    add_produto(name, formula)
+                    add_produto(name, form)
                 go('custos')
-                st.experimental_rerun()
-            else:
-                st.error('Preencha nome e fórmula.')
-        if st.button('🔙 Cancelar', key='cancel_prod'):
+        if st.button('🔙 Cancelar', key='btn_cancel_prod'):
             go('custos')
         st.markdown('</div>', unsafe_allow_html=True)
-    with right:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.subheader('Variáveis Disponíveis')
+    with cols[1]:
+        st.markdown('<div class="card">Variáveis disponíveis</div>',
+                    unsafe_allow_html=True)
         for v in get_variaveis():
             st.write(f"- **{v.nome}** = {v.valor}")
-        st.markdown('</div>', unsafe_allow_html=True)
 
-# --- Variáveis de Produção ---
+# --- VARIÁVEIS DE PRODUÇÃO ---
 elif st.session_state.page == 'variaveis':
     st.markdown('<div class="title">📦 Variáveis de Produção</div>',
                 unsafe_allow_html=True)
-    left, right = st.columns([1, 3])
-    # Preencher campos se editando
-    if st.session_state.edit_var:
-        var = next((x for x in get_variaveis() if x.id ==
-                   st.session_state.edit_var), None)
-        default_name = var.nome
-        default_val = var.valor
+    cols = st.columns([1, 3])
+    edit = st.session_state.edit_id
+    if edit:
+        var = next((x for x in get_variaveis() if x.id == edit), None)
+        dname, dval = var.nome, var.valor
     else:
-        default_name = ''
-        default_val = 0.0
-    with left:
+        dname, dval = '', 0.0
+    with cols[0]:
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        name = st.text_input('Nome da Variável',
-                             value=default_name, key='var_name')
-        val = st.number_input('Valor', value=default_val,
+        name = st.text_input('Nome', value=dname, key='var_name')
+        val = st.number_input('Valor', value=dval,
                               format='%.2f', key='var_value')
-        if st.button('💾 Salvar Variável', key='save_var'):
+        if st.button('💾 Salvar', key='btn_save_var'):
             if name:
-                if st.session_state.edit_var:
-                    update_variavel(st.session_state.edit_var, name, val)
+                if edit:
+                    update_variavel(edit, name, val)
                 else:
                     add_variavel(name, val)
                 go('custos')
-                st.experimental_rerun()
-            else:
-                st.error('Informe um nome.')
-        if st.button('🔙 Cancelar', key='cancel_var'):
+        if st.button('🔙 Voltar', key='btn_cancel_var'):
             go('custos')
         st.markdown('</div>', unsafe_allow_html=True)
-    with right:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
+    with cols[1]:
+        st.markdown('<div class="card">Lista de Variáveis</div>',
+                    unsafe_allow_html=True)
         vars_ = get_variaveis()
         if vars_:
             for v in vars_:
-                cols = st.columns([4, 1, 1])
-                with cols[0]:
-                    st.write(f"**{v.nome}** → {v.valor}")
-                with cols[1]:
-                    if st.button('✏️', key=f'edit_var_{v.id}'):
-                        st.session_state.edit_var = v.id
-                        go('variaveis')
-                with cols[2]:
-                    if st.button('🗑️', key=f'del_var_{v.id}'):
-                        delete_variavel(v.id)
-                        st.experimental_rerun()
+                colv = st.columns([4, 1, 1])
+                colv[0].write(f"**{v.nome}** → {v.valor}")
+                if colv[1].button('✏️', key=f'var_edit_{v.id}'):
+                    go('variaveis', v.id)
+                if colv[2].button('🗑️', key=f'var_del_{v.id}'):
+                    delete_variavel(v.id)
+                    go('variaveis')
         else:
             st.info('Nenhuma variável cadastrada.')
-        st.markdown('</div>', unsafe_allow_html=True)
