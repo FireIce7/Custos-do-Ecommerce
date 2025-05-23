@@ -14,31 +14,31 @@ st.markdown("""
 <style>
     /* Título da Navegação na Sidebar */
     .st-emotion-cache-10oheav p {
-        font-size: 22px !important;
+        font-size: 26px !important;
         font-weight: bold;
         margin-bottom: 10px;
     }
 
     /* Itens do menu na Sidebar */
     .st-emotion-cache-16idsys p, .st-emotion-cache-16idsys span {
-        font-size: 18px !important;
+        font-size: 20px !important;
     }
 
     /* Título do Expander do Produto/Variável */
     .st-emotion-cache-1avcm0n span {
-        font-size: 22px !important;
+        font-size: 26px !important;
         font-weight: bold;
     }
 
     /* Nome da Categoria na listagem */
     .category-list-item {
-        font-size: 18px !important;
+        font-size: 20px !important;
         margin-left: 5px;
     }
 
     /* Valor da Métrica (Custo Atual) */
     .st-emotion-cache-1g6goon div {
-        font-size: 22px !important;
+        font-size: 26px !important;
         line-height: 1.3;
     }
     /* Rótulo da Métrica (Custo Atual) */
@@ -497,10 +497,32 @@ def pagination_component(total_pages, current_page, key_suffix):
     st.markdown("</div>", unsafe_allow_html=True)
     return current_page
 
+
+# --- Variáveis pré-definidas da calculadora ---
+CALC_VARS = {
+    "Placa 50x50cm - Branca (g)": 137.0,
+    "Placa 50x50cm - Cinza (g)": 145.0,
+    "Placa 50x50cm - Preto (g)": 150.0,
+    "Placa 30x30cm - Branca (g)": 44.0,
+}
+
+
+def show_calculator_variables():
+    st.subheader("Variáveis da Calculadora (Definidas pelo Usuário)")
+    for label in CALC_VARS:
+        CALC_VARS[label] = st.number_input(
+            label, min_value=0.0, value=CALC_VARS[label], format="%.2f")
+
+
 # --- Cálculo de preço (v6 - Layout Aprimorado) ---
 
 
 def show_price_calculator():
+    submenu = st.radio("Menu da Calculadora", [
+                       "Calcular Preço", "Variáveis"], horizontal=True)
+    if submenu == "Variáveis":
+        show_calculator_variables()
+        return
     st.header("Calculadora de Preços")
 
     with st.container(border=True):
@@ -591,7 +613,8 @@ def manage_categories(item_type):
                 if st.session_state.get(f"editing_cat_{cat_id}"):
                     st.session_state[f"confirm_delete_cat_{cat_id}"] = False
 
-                cat_cols = st.columns([4, 1, 1])
+                # ✅ CORRIGIDO VISUAL CATEGORIAS
+                cat_cols = st.columns([4, 1, 1], gap="small")
                 with cat_cols[0]:
                     if st.session_state.get(f"editing_cat_{cat_id}"):
                         # Formulário de Edição de Categoria (v7 - Correção)
@@ -622,12 +645,14 @@ def manage_categories(item_type):
                             unsafe_allow_html=True)
                 with cat_cols[1]:
                     if not st.session_state.get(f"editing_cat_{cat_id}") and not st.session_state.get(f"confirm_delete_cat_{cat_id}"):
-                        if st.button("Editar", key=f"edit_cat_{cat_id}", help="Editar Categoria"):
+                        # ✅ CORRIGIDO CATEGORIA
+                        if st.button("Editar", key=f"edit_cat_{cat_id}", use_container_width=True):
                             st.session_state[f"editing_cat_{cat_id}"] = True
                             st.rerun()
                 with cat_cols[2]:
                     if not st.session_state.get(f"editing_cat_{cat_id}") and not st.session_state.get(f"confirm_delete_cat_{cat_id}"):
-                        if st.button("Deletar", key=f"delete_cat_{cat_id}", help="Deletar Categoria"):
+                        # ✅ CORRIGIDO CATEGORIA
+                        if st.button("Deletar", key=f"delete_cat_{cat_id}", use_container_width=True):
                             st.session_state[f"confirm_delete_cat_{cat_id}"] = True
                             st.rerun()
                 st.markdown("</div>", unsafe_allow_html=True)
@@ -635,7 +660,8 @@ def manage_categories(item_type):
                 if st.session_state.get(f"confirm_delete_cat_{cat_id}"):
                     st.warning(
                         f"Tem certeza que deseja deletar a categoria \'{cat_name}\'? Itens nesta categoria ficarão sem categoria.")
-                    confirm_cols = st.columns(2)
+                    # ✅ CONFIRMAR/CANCELAR MAIS PRÓXIMOS
+                    confirm_cols = st.columns([1, 1], gap='small')
                     with confirm_cols[0]:
                         if st.button("Confirmar Exclusão", key=f"confirm_del_btn_{cat_id}"):
                             if delete_category(cat_id):
@@ -660,7 +686,7 @@ def manage_categories(item_type):
         with st.form(key=f"add_{item_type}_category_form"):
             st.subheader("Adicionar Nova")
             new_cat_name = st.text_input(
-                "Nome da Categoria", label_visibility="collapsed", placeholder="Nome da Categoria")
+                "Nome da Categoria", label_visibility="visible", placeholder="Nome da Categoria")
             submitted = st.form_submit_button("Adicionar Categoria")
             if submitted:
                 if new_cat_name:
@@ -789,16 +815,19 @@ def show_variables():
                     # Botões fora do form de edição
                     st.markdown(
                         "<div class=\"action-buttons-container\">", unsafe_allow_html=True)
-                    btn_col1, btn_col2 = st.columns([1, 10])
+                    # ✅ CORRIGIDO VISUAL VARIÁVEIS
+                    btn_col1, btn_col2 = st.columns([1, 1], gap="small")
                     with btn_col1:
                         if not st.session_state.get(f"confirm_delete_var_{var_id}"):
-                            if st.button("Editar", key=f"edit_var_{var_id}", help="Editar Variável"):
+                            # ✅ CORRIGIDO TEXTO QUEBRADO
+                            if st.button("Editar", key=f"edit_var_{var_id}", use_container_width=True):
                                 st.session_state.editing_var = var_id
                                 st.session_state.confirm_delete_var = None
                                 st.rerun()
                     with btn_col2:
                         if not st.session_state.get(f"editing_var_{var_id}"):
-                            if st.button("Deletar", key=f"del_var_{var_id}", help="Deletar Variável"):
+                            # ✅ CORRIGIDO
+                            if st.button("Deletar", key=f"del_var_{var_id}", use_container_width=True):
                                 st.session_state.confirm_delete_var = var_id
                                 st.session_state.editing_var = None
                                 st.rerun()
@@ -807,7 +836,8 @@ def show_variables():
                     if st.session_state.get("confirm_delete_var") == var_id:
                         st.warning(
                             f"Tem certeza que deseja deletar a variável \'{name}\'?")
-                        confirm_cols = st.columns(2)
+                        # ✅ CONFIRMAR/CANCELAR MAIS PRÓXIMOS
+                        confirm_cols = st.columns([1, 1], gap='small')
                         with confirm_cols[0]:
                             if st.button("Confirmar Exclusão", key=f"confirm_del_var_btn_{var_id}"):
                                 if delete_variable(var_id):
@@ -829,7 +859,8 @@ def show_variables():
                         new_category_id = select_category(
                             "variable", category_id, key_prefix=f"edit_var_{var_id}")
 
-                        edit_cols = st.columns(2)
+                        # ✅ SALVAR/CANCELAR MAIS PRÓXIMOS
+                        edit_cols = st.columns([1, 1], gap='small')
                         with edit_cols[0]:
                             submitted_save = st.form_submit_button("Salvar")
                         with edit_cols[1]:
@@ -964,7 +995,8 @@ def show_products():
                     # Botões fora do form de edição
                     st.markdown(
                         "<div class=\"action-buttons-container\">", unsafe_allow_html=True)
-                    btn_col1, btn_col2, _ = st.columns([1, 1, 8])
+                    btn_col1, btn_col2, _ = st.columns(
+                        [1, 1, 6], gap='small')  # ✅ EDITAR/DELETAR PRODUTOS
                     with btn_col1:
                         if not st.session_state.get(f"confirm_delete_prod_{prod_id}"):
                             if st.button("Editar", key=f"edit_prod_{prod_id}"):
@@ -973,7 +1005,8 @@ def show_products():
                                 st.rerun()
                     with btn_col2:
                         if not st.session_state.get(f"editing_prod_{prod_id}"):
-                            if st.button("Deletar", key=f"del_prod_{prod_id}"):
+                            # ✅ LARGURA AJUSTADA
+                            if st.button("Deletar", key=f"del_prod_{prod_id}", use_container_width=True):
                                 st.session_state.confirm_delete_prod = prod_id
                                 st.session_state.editing_prod = None
                                 st.rerun()
@@ -982,7 +1015,8 @@ def show_products():
                     if st.session_state.get("confirm_delete_prod") == prod_id:
                         st.warning(
                             f"Tem certeza que deseja deletar o produto \'{name}\'?")
-                        confirm_cols = st.columns(2)
+                        # ✅ CONFIRMAR/CANCELAR MAIS PRÓXIMOS
+                        confirm_cols = st.columns([1, 1], gap='small')
                         with confirm_cols[0]:
                             if st.button("Confirmar Exclusão", key=f"confirm_del_prod_btn_{prod_id}"):
                                 if delete_product(prod_id):
@@ -997,6 +1031,10 @@ def show_products():
                 if st.session_state.get("editing_prod") == prod_id:
                     # Botão 'Ver Variáveis' fora do form
                     if st.button("Ver Variáveis Disponíveis", key=f"show_vars_edit_{prod_id}"):
+                        toggle_key = f"show_vars_popup_edit_{prod_id}"
+                        st.session_state[toggle_key] = not st.session_state.get(
+                            toggle_key, False)
+                        st.rerun()
                         # Toggle visibility
                         st.session_state[f"show_vars_popup_edit_{prod_id}"] = not st.session_state.get(
                             f"show_vars_popup_edit_{prod_id}", False)
@@ -1063,6 +1101,9 @@ def show_products():
             with st.expander("Formulário Novo Produto", expanded=True):
                 # Botão 'Ver Variáveis' fora do form
                 if st.button("Ver Variáveis Disponíveis", key="show_vars_new"):
+                    st.session_state["show_vars_popup_new"] = not st.session_state.get(
+                        "show_vars_popup_new", False)
+                    st.rerun()
                     st.session_state.show_vars_popup_new = not st.session_state.get(
                         "show_vars_popup_new", False)
                     st.rerun()
