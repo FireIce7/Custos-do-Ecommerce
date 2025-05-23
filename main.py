@@ -204,35 +204,65 @@ def update_category(category_id, new_name):
     conn = get_connection()
     c = conn.cursor()
     success = False
+    error_message = None
     try:
-        c.execute("UPDATE categories SET name = ? WHERE id = ?",
-                  (new_name, category_id))
-        conn.commit()
-        st.success("Categoria atualizada.")
-        success = True
+        c.execute("SELECT type FROM categories WHERE id = ?", (category_id,))
+        result = c.fetchone()
+        if not result:
+            error_message = "Categoria não encontrada."
+        else:
+            category_type = result[0]
+            # Verificar se já existe outra categoria com o mesmo nome e tipo
+            c.execute("SELECT id FROM categories WHERE name = ? AND type = ? AND id != ?",
+                      (new_name, category_type, category_id))
+            existing = c.fetchone()
+            if existing:
+                error_message = f"Já existe uma categoria com o nome \'{new_name}\' para o tipo \'{category_type}\'."
+            else:
+                c.execute("UPDATE categories SET name = ? WHERE id = ?",
+                          (new_name, category_id))
+                conn.commit()
+                success = True
     except sqlite3.IntegrityError:
-        st.error(f"Já existe uma categoria com o nome \'{new_name}\'.")
+        error_message = f"Erro de integridade ao tentar atualizar para o nome \'{new_name}\'."
     except Exception as e:
-        st.error(f"Erro ao atualizar categoria: {e}")
+        error_message = f"Erro inesperado ao atualizar categoria: {e}"
     finally:
         conn.close()
-    return success
+    return success, error_message  # Retorna status e mensagem de erro
 
 
 def delete_category(category_id):
     conn = get_connection()
     c = conn.cursor()
     success = False
+    error_message = None
     try:
-        c.execute("DELETE FROM categories WHERE id = ?", (category_id,))
-        conn.commit()
-        st.success("Categoria deletada.")
-        success = True
+        # Verificar se a categoria existe antes de deletar
+        c.execute("SELECT name FROM categories WHERE id = ?", (category_id,))
+        category = c.fetchone()
+        if not category:
+            error_message = "Categoria não encontrada para exclusão."
+        else:
+            category_name = category[0]
+            c.execute("DELETE FROM categories WHERE id = ?", (category_id,))
+            conn.commit()
+            # Verificar se a exclusão foi bem-sucedida (opcional, commit lança exceção em caso de erro grave)
+            c.execute("SELECT id FROM categories WHERE id = ?", (category_id,))
+            if c.fetchone() is None:
+                success = True
+            else:
+                error_message = "Falha ao deletar a categoria do banco de dados."
+
+    except sqlite3.Error as e:  # Captura erros específicos do SQLite
+        error_message = f"Erro no banco de dados ao deletar categoria: {e}"
+        conn.rollback()  # Desfaz a transação em caso de erro
     except Exception as e:
-        st.error(f"Erro ao deletar categoria: {e}")
+        error_message = f"Erro inesperado ao deletar categoria: {e}"
+        conn.rollback()
     finally:
         conn.close()
-    return success
+    return success, error_message  # Retorna status e mensagem de erro
 
 # --- Funções CRUD para Variáveis (v6 - Paginação/Filtro) ---
 
@@ -498,12 +528,13 @@ def pagination_component(total_pages, current_page, key_suffix):
     return current_page
 
 
-# --- Variáveis pré-definidas da calculadora ---
+# --- Variáveis pré-definidas da calculadora (Pesos em gramas) ---
 CALC_VARS = {
-    "Placa 50x50cm - Branca (g)": 137.0,
-    "Placa 50x50cm - Cinza (g)": 145.0,
-    "Placa 50x50cm - Preto (g)": 150.0,
-    "Placa 30x30cm - Branca (g)": 44.0,
+    "Placa 50x50cm (g)": 137.0,  # Peso da placa 50x50 em gramas
+    "Placa 30x30cm (g)": 44.0,  # Peso da placa 30x30 em gramas
+    "Placa 29x29cm (g)": 40.0,  # Peso da placa 29x29 em gramas (valor exemplo)
+    # Custo adicional por KG se Limpeza/Granulação for Sim
+    # Custo adicional por KG se Laminação for Sim
 }
 
 
@@ -529,15 +560,15 @@ def show_price_calculator():
         col1, col2 = st.columns(2)
         with col1:
             st.subheader("Dados Base")
+            # Ordem ajustada: Quantidade primeiro
             quantidade_kg = st.number_input(
                 "Quantidade (KG)", min_value=0.1, format="%.2f", key="quantidade_kg", value=1.0)
             preco_ps = st.number_input(
                 "Preço do PS (por KG)", min_value=0.0, format="%.2f", key="preco_ps")
-            valor_frete = st.number_input(
-                "Valor do Frete (total)", min_value=0.0, format="%.2f", key="valor_frete")
+            valor_frete_kg = st.number_input(
+                "Valor do Frete (por KG)", min_value=0.0, format="%.2f", key="valor_frete_kg")
             percent_perdas = st.number_input(
                 "% de Perdas", min_value=0.0, max_value=100.0, format="%.1f", key="percent_perdas", value=5.0)
-
         with col2:
             st.subheader("Custos Adicionais")
             tem_limpeza = st.radio(
@@ -563,24 +594,80 @@ def show_price_calculator():
 
     st.divider()
 
-    if st.button("Calcular Preço Final (Lógica Pendente)", key="calcular_preco_final", use_container_width=True):
-        custo_material = preco_ps * quantidade_kg
-        custo_processamento = (valor_limpeza + valor_laminacao) * quantidade_kg
-        custo_total_base = custo_material + valor_frete + custo_processamento
-        custo_com_perdas = custo_total_base / \
-            (1 - percent_perdas / 100) if percent_perdas < 100 else float("inf")
-        valor_ipi = custo_com_perdas * \
-            (percent_ipi / 100) if tem_ipi == "Sim" else 0
-        preco_final_calculado = custo_com_perdas + valor_ipi
+    if st.button("Calcular Preços", key="calcular_preco_final", use_container_width=True):
+        # --- Obter valores dos inputs ---
+        q_total = quantidade_kg
+        p_ps = preco_ps
+        p_frete_kg = valor_frete_kg  # Já é por KG conforme alteração anterior
+        percent_perdas_val = percent_perdas
+        percent_ipi_val = percent_ipi if tem_ipi == "Sim" else 0
+        limpeza_sim = tem_limpeza == "Sim"
+        laminacao_sim = tem_laminacao == "Sim"
 
-        st.subheader("Resultado do Cálculo")
-        if preco_final_calculado == float("inf"):
+        # --- Obter valores das variáveis da calculadora ---
+        try:
+            peso_50x50_g = CALC_VARS["Placa 50x50cm (g)"]
+            peso_30x30_g = CALC_VARS["Placa 30x30cm (g)"]
+            peso_29x29_g = CALC_VARS["Placa 29x29cm (g)"]
+        except KeyError as e:
+            st.error(
+                f"Erro: Variável da calculadora não encontrada: {e}. Verifique a seção 'Variáveis'.")
+            st.stop()
+
+        # Converter pesos para KG
+        peso_50x50_kg = peso_50x50_g / 1000.0
+        peso_30x30_kg = peso_30x30_g / 1000.0
+        peso_29x29_kg = peso_29x29_g / 1000.0
+
+        # --- Lógica de Cálculo ---
+        if q_total <= 0:
+            st.error("Erro: Quantidade (KG) deve ser maior que zero.")
+        elif percent_perdas_val >= 100:
             st.error("Erro: Percentual de perdas não pode ser 100% ou maior.")
         else:
-            st.metric("Preço Final Sugerido",
-                      f"R$ {preco_final_calculado:.2f}")
-            st.info(
-                "Nota: A lógica exata do cálculo final ainda precisa ser implementada conforme sua necessidade.")
+            # 1. Preço1 (Preço Base + Frete por KG)
+            preco1 = p_ps + p_frete_kg
+
+            # 2. Aplicar IPI
+            preco1_com_ipi = preco1 * (1 + percent_ipi_val / 100.0)
+
+            # 3. Preço2 (Preço com IPI + Custos Adicionais)
+            preco2 = preco1_com_ipi
+            if limpeza_sim:
+                preco2 += valor_limpeza
+            if laminacao_sim:
+                preco2 += valor_laminacao
+
+            # 4. Separar Quantidades
+            p = percent_perdas_val / 100.0
+            q_reutilizado = q_total * p
+            q_normal = q_total * (1 - p)
+
+            # 5. Calcular Custo Total Processado
+            custo_total_processado = (
+                preco1_com_ipi * q_normal) + (preco2 * q_reutilizado)
+
+            # 6. Calcular Preço por KG Efetivo
+            preco_por_kg_efetivo = custo_total_processado / q_total
+
+            # 7. Calcular Custo de Cada Placa
+            custo_placa_50x50 = peso_50x50_kg * preco_por_kg_efetivo
+            custo_placa_30x30 = peso_30x30_kg * preco_por_kg_efetivo
+            custo_placa_29x29 = peso_29x29_kg * preco_por_kg_efetivo
+
+            # --- Exibir Resultados ---
+            st.subheader("Resultado do Cálculo")
+            res_col1, res_col2 = st.columns(2)
+            with res_col1:
+                st.metric("Custo Total Processado",
+                          f"R$ {custo_total_processado:.2f}")
+                st.metric("Preço Efetivo por KG",
+                          f"R$ {preco_por_kg_efetivo:.2f}")
+            with res_col2:
+                # Mais casas decimais para custo unitário
+                st.metric("Custo Placa 50x50cm", f"R$ {custo_placa_50x50:.4f}")
+                st.metric("Custo Placa 30x30cm", f"R$ {custo_placa_30x30:.4f}")
+                st.metric("Custo Placa 29x29cm", f"R$ {custo_placa_29x29:.4f}")
 
     else:
         st.subheader("Resultado do Cálculo")
@@ -610,17 +697,14 @@ def manage_categories(item_type):
             st.write(
                 f"Mostrando {len(categories)} de {total_items} categorias.")
             for cat_id, cat_name in categories:
-                if st.session_state.get(f"editing_cat_{cat_id}"):
-                    st.session_state[f"confirm_delete_cat_{cat_id}"] = False
-
-                # ✅ CORRIGIDO VISUAL CATEGORIAS
-                cat_cols = st.columns([4, 1, 1], gap="small")
-                with cat_cols[0]:
+                # Usar st.expander para cada categoria
+                with st.expander(f"{cat_name}"):
+                    # Estado 1: Formulário de Edição
                     if st.session_state.get(f"editing_cat_{cat_id}"):
-                        # Formulário de Edição de Categoria (v7 - Correção)
                         with st.form(key=f"edit_cat_form_{cat_id}"):
+                            st.markdown("**Editar Nome da Categoria**")
                             new_name = st.text_input(
-                                "Novo nome", value=cat_name, key=f"edit_cat_name_{cat_id}")
+                                "Novo nome", value=cat_name, key=f"edit_cat_name_{cat_id}", label_visibility="collapsed")
                             edit_btn_cols = st.columns(2)
                             with edit_btn_cols[0]:
                                 submitted_save = st.form_submit_button(
@@ -628,49 +712,83 @@ def manage_categories(item_type):
                             with edit_btn_cols[1]:
                                 submitted_cancel = st.form_submit_button(
                                     "Cancelar", type="secondary")
-
                             if submitted_save:
-                                if update_category(cat_id, new_name):
-                                    st.session_state[f"editing_cat_{cat_id}"] = False
-                                    st.rerun()
+                                if new_name and new_name.strip():
+                                    if new_name.strip() != cat_name:
+                                        success, error_message = update_category(
+                                            cat_id, new_name.strip())
+                                        if success:
+                                            st.success(
+                                                f"Categoria \'{new_name.strip()}\' atualizada com sucesso!")
+                                            st.session_state[f"editing_cat_{cat_id}"] = False
+                                            st.rerun()
+                                        else:
+                                            st.error(
+                                                error_message if error_message else "Falha ao atualizar categoria.")
+                                    else:
+                                        # Nome não mudou, apenas fechar o form
+                                        st.session_state[f"editing_cat_{cat_id}"] = False
+                                        st.rerun()
+                                else:
+                                    st.warning(
+                                        "O nome da categoria não pode ficar vazio.")
                             if submitted_cancel:
                                 st.session_state[f"editing_cat_{cat_id}"] = False
                                 st.rerun()
-                    else:
-                        st.markdown(
-                            f"<span class=\"category-list-item\">- {cat_name}</span>", unsafe_allow_html=True)
-
-                # Botões fora do form de edição
-                st.markdown("<div class=\"action-buttons-container\">",
-                            unsafe_allow_html=True)
-                with cat_cols[1]:
-                    if not st.session_state.get(f"editing_cat_{cat_id}") and not st.session_state.get(f"confirm_delete_cat_{cat_id}"):
-                        # ✅ CORRIGIDO CATEGORIA
-                        if st.button("Editar", key=f"edit_cat_{cat_id}", use_container_width=True):
-                            st.session_state[f"editing_cat_{cat_id}"] = True
-                            st.rerun()
-                with cat_cols[2]:
-                    if not st.session_state.get(f"editing_cat_{cat_id}") and not st.session_state.get(f"confirm_delete_cat_{cat_id}"):
-                        # ✅ CORRIGIDO CATEGORIA
-                        if st.button("Deletar", key=f"delete_cat_{cat_id}", use_container_width=True):
-                            st.session_state[f"confirm_delete_cat_{cat_id}"] = True
-                            st.rerun()
-                st.markdown("</div>", unsafe_allow_html=True)
-
-                if st.session_state.get(f"confirm_delete_cat_{cat_id}"):
-                    st.warning(
-                        f"Tem certeza que deseja deletar a categoria \'{cat_name}\'? Itens nesta categoria ficarão sem categoria.")
-                    # ✅ CONFIRMAR/CANCELAR MAIS PRÓXIMOS
-                    confirm_cols = st.columns([1, 1], gap='small')
-                    with confirm_cols[0]:
-                        if st.button("Confirmar Exclusão", key=f"confirm_del_btn_{cat_id}"):
-                            if delete_category(cat_id):
+                    # Estado 2: Confirmação de Exclusão
+                    elif st.session_state.get(f"confirm_delete_cat_{cat_id}"):
+                        st.warning(
+                            f"Tem certeza que deseja deletar a categoria \'{cat_name}\'? Itens associados (produtos/variáveis) ficarão sem categoria.")
+                        confirm_cols = st.columns([1, 1], gap='small')
+                        with confirm_cols[0]:
+                            if st.button("Confirmar Exclusão", key=f"confirm_del_btn_{cat_id}", use_container_width=True):
+                                # Trata retorno (success, error_message)
+                                success, error_message = delete_category(
+                                    cat_id)
+                                if success:
+                                    # Mensagem de sucesso
+                                    st.success(
+                                        f"Categoria \'{cat_name}\' deletada com sucesso!")
+                                    st.session_state[f"confirm_delete_cat_{cat_id}"] = False
+                                    # Resetar paginação para evitar página vazia após exclusão do último item
+                                    # -1 porque um foi deletado
+                                    remaining_items_on_page = len(
+                                        categories) - 1
+                                    items_before_this_page = (
+                                        current_page - 1) * ITEMS_PER_PAGE
+                                    total_items_after_delete = total_items - 1
+                                    if remaining_items_on_page == 0 and items_before_this_page >= total_items_after_delete and current_page > 1:
+                                        st.session_state[f"page_cat_{item_type}"] = current_page - 1
+                                    st.rerun()
+                                else:
+                                    st.error(
+                                        error_message if error_message else "Falha ao deletar categoria.")
+                                    # Resetar estado mesmo em caso de erro para não travar
+                                    st.session_state[f"confirm_delete_cat_{cat_id}"] = False
+                                    st.rerun()  # Rerun para mostrar erro e limpar estado de confirmação
+                        with confirm_cols[1]:
+                            if st.button("Cancelar", key=f"cancel_del_btn_{cat_id}", type="secondary", use_container_width=True):
                                 st.session_state[f"confirm_delete_cat_{cat_id}"] = False
                                 st.rerun()
-                    with confirm_cols[1]:
-                        if st.button("Cancelar Exclusão", key=f"cancel_del_btn_{cat_id}", type="secondary"):
-                            st.session_state[f"confirm_delete_cat_{cat_id}"] = False
-                            st.rerun()
+
+                    # Estado 3: Botões de Ação Padrão (Dentro do Expander)
+                    else:
+                        st.markdown(
+                            "<div class=\"action-buttons-container\">", unsafe_allow_html=True)
+                        action_cols = st.columns([1, 1], gap="small")
+                        with action_cols[0]:
+                            if st.button("Editar", key=f"edit_cat_{cat_id}", use_container_width=True):
+                                st.session_state[f"editing_cat_{cat_id}"] = True
+                                # Garantir limpeza
+                                st.session_state[f"confirm_delete_cat_{cat_id}"] = False
+                                st.rerun()
+                        with action_cols[1]:
+                            if st.button("Deletar", key=f"delete_cat_{cat_id}", use_container_width=True):
+                                st.session_state[f"confirm_delete_cat_{cat_id}"] = True
+                                # Garantir limpeza
+                                st.session_state[f"editing_cat_{cat_id}"] = False
+                                st.rerun()
+                        st.markdown("</div>", unsafe_allow_html=True)
             st.divider()
             new_page = pagination_component(
                 total_pages, current_page, f"cat_{item_type}")
@@ -1192,4 +1310,4 @@ def main():
 if __name__ == "__main__":
     main()
 
-# test
+# test1
