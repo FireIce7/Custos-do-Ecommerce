@@ -20,7 +20,7 @@ TEXTOS = {
     # Submenu: Variáveis da Calculadora
     "var_titulo": "Gerenciar Pesos e Perdas por Tipo de Placa",
     "var_selecione_texto": "Selecionar Placa",
-    "var_selecione_style": "font-size:24px; margin-bottom:-70px;",
+    "var_selecione_style": "font-size:24px; margin-bottom:0px;",
     "var_placas": {
         "50": "Placa 50x50cm",
         "30": "Placa 30x30cm",
