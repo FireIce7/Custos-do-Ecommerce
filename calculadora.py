@@ -9,7 +9,7 @@ def show_calculator_variables():
     default_vals = {
         "peso_50x50": 137.0, "perda_50x50": 10.0,
         "peso_30x30": 44.0,  "perda_30x30": 8.0,
-        "peso_29x29": 40.0,  "perda_29x29": 7.0,
+        "peso_25x25": 40.0,  "perda_25x25": 7.0,
     }
 
     with st.expander(TEXTOS["calc_resetar"]):
@@ -33,7 +33,7 @@ def show_calculator_variables():
     placas = [
         ("50x50cm", "peso_50x50", "perda_50x50"),
         ("30x30cm", "peso_30x30", "perda_30x30"),
-        ("29x29cm", "peso_29x29", "perda_29x29"),
+        ("25x25cm", "peso_25x25", "perda_25x25"),
     ]
     aba_labels = [TEXTOS["var_placas"][label[:2]] for label, *_ in placas]
 
@@ -118,10 +118,10 @@ def show_price_calculator():
         try:
             peso_50x50 = get_calc_var("peso_50x50") / 1000.0
             peso_30x30 = get_calc_var("peso_30x30") / 1000.0
-            peso_29x29 = get_calc_var("peso_29x29") / 1000.0
+            peso_25x25 = get_calc_var("peso_25x25") / 1000.0
             perda_50 = get_calc_var("perda_50x50") / 100.0
             perda_30 = get_calc_var("perda_30x30") / 100.0
-            perda_29 = get_calc_var("perda_29x29") / 100.0
+            perda_25 = get_calc_var("perda_25x25") / 100.0
         except Exception:
             st.error("Erro ao buscar variáveis de peso ou perda.")
             return
@@ -132,7 +132,7 @@ def show_price_calculator():
 
         custo_efetivo_50 = (1 - perda_50) * preco1_com_ipi + perda_50 * preco2
         custo_efetivo_30 = (1 - perda_30) * preco1_com_ipi + perda_30 * preco2
-        custo_efetivo_29 = (1 - perda_29) * preco1_com_ipi + perda_29 * preco2
+        custo_efetivo_25 = (1 - perda_25) * preco1_com_ipi + perda_25 * preco2
 
         custo_total_processado = quantidade_kg * \
             ((1 - perda_50) * preco1_com_ipi + perda_50 * preco2)
@@ -140,7 +140,7 @@ def show_price_calculator():
 
         custo_placa_50 = peso_50x50 * custo_efetivo_50
         custo_placa_30 = peso_30x30 * custo_efetivo_30
-        custo_placa_29 = peso_29x29 * custo_efetivo_29
+        custo_placa_25 = peso_25x25 * custo_efetivo_25
 
         st.subheader(TEXTOS["calc_resultado"])
         res_col1, res_col2 = st.columns(2)
@@ -151,7 +151,7 @@ def show_price_calculator():
         with res_col2:
             st.metric("Custo Placa 50x50", f"R$ {custo_placa_50:.4f}")
             st.metric("Custo Placa 30x30", f"R$ {custo_placa_30:.4f}")
-            st.metric("Custo Placa 29x29", f"R$ {custo_placa_29:.4f}")
+            st.metric("Custo Placa 25x25", f"R$ {custo_placa_25:.4f}")
     else:
         st.subheader(TEXTOS["calc_resultado"])
         st.info(TEXTOS["calc_info"])
