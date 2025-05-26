@@ -24,7 +24,7 @@ TEXTOS = {
     "var_placas": {
         "50": "Placa 50x50cm",
         "30": "Placa 30x30cm",
-        "29": "Placa 25x25cm"
+        "25": "Placa 25x25cm"
     },
 
     # Seção: Custos de Produção
