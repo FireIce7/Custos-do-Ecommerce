@@ -1,6 +1,7 @@
 import streamlit as st
 from textos import TEXTOS
-from banco import get_calc_var
+from banco import get_calc_var, get_connection
+
 
 def show_calculator_variables():
     st.subheader(TEXTOS["var_titulo"])
@@ -16,11 +17,14 @@ def show_calculator_variables():
             conn = get_connection()
             c = conn.cursor()
             for var, val in default_vals.items():
-                c.execute("SELECT id FROM production_variables WHERE name = ?", (var,))
+                c.execute(
+                    "SELECT id FROM production_variables WHERE name = ?", (var,))
                 if c.fetchone():
-                    c.execute("UPDATE production_variables SET value = ? WHERE name = ?", (val, var))
+                    c.execute(
+                        "UPDATE production_variables SET value = ? WHERE name = ?", (val, var))
                 else:
-                    c.execute("INSERT INTO production_variables (name, value) VALUES (?, ?)", (var, val))
+                    c.execute(
+                        "INSERT INTO production_variables (name, value) VALUES (?, ?)", (var, val))
             conn.commit()
             conn.close()
             st.success("Variáveis redefinidas para os valores padrão.")
@@ -33,7 +37,8 @@ def show_calculator_variables():
     ]
     aba_labels = [TEXTOS["var_placas"][label[:2]] for label, *_ in placas]
 
-    st.markdown(f"<h4 style='{TEXTOS['var_selecione_style']}'>{TEXTOS['var_selecione_texto']}</h4>", unsafe_allow_html=True)
+    st.markdown(
+        f"<h4 style='{TEXTOS['var_selecione_style']}'>{TEXTOS['var_selecione_texto']}</h4>", unsafe_allow_html=True)
     aba = st.radio("", aba_labels, horizontal=True)
     index = aba_labels.index(aba)
     label, peso_key, perda_key = placas[index]
@@ -44,19 +49,24 @@ def show_calculator_variables():
     with st.form(key=f"form_{label}"):
         col1, col2 = st.columns(2)
         with col1:
-            novo_peso = st.number_input("Peso (g)", min_value=0.0, value=peso_atual, format="%.2f", key=f"peso_{label}")
+            novo_peso = st.number_input(
+                "Peso (g)", min_value=0.0, value=peso_atual, format="%.2f", key=f"peso_{label}")
         with col2:
-            nova_perda = st.number_input("% de Perda", min_value=0.0, max_value=100.0, value=perda_atual, format="%.2f", key=f"perda_{label}")
+            nova_perda = st.number_input(
+                "% de Perda", min_value=0.0, max_value=100.0, value=perda_atual, format="%.2f", key=f"perda_{label}")
         salvar = st.form_submit_button("Salvar")
         if salvar:
             conn = get_connection()
             c = conn.cursor()
             for key, val in [(peso_key, novo_peso), (perda_key, nova_perda)]:
-                c.execute("SELECT id FROM production_variables WHERE name = ?", (key,))
+                c.execute(
+                    "SELECT id FROM production_variables WHERE name = ?", (key,))
                 if c.fetchone():
-                    c.execute("UPDATE production_variables SET value = ? WHERE name = ?", (val, key))
+                    c.execute(
+                        "UPDATE production_variables SET value = ? WHERE name = ?", (val, key))
                 else:
-                    c.execute("INSERT INTO production_variables (name, value) VALUES (?, ?)", (key, val))
+                    c.execute(
+                        "INSERT INTO production_variables (name, value) VALUES (?, ?)", (key, val))
             conn.commit()
             conn.close()
             st.success(f"Valores da placa {label} atualizados.")
@@ -64,30 +74,43 @@ def show_calculator_variables():
 
 
 def show_price_calculator():
-    st.markdown("<style>.big-radio .st-emotion-cache-1wmy9hl { font-size: 26px !important; font-weight: 600 !important; }</style>", unsafe_allow_html=True)
-    st.markdown(f"<h4 style='{TEXTOS['calc_menu_titulo_style']}'>{TEXTOS['calc_menu_titulo_texto']}</h4>", unsafe_allow_html=True)
+    st.markdown(
+        "<style>.big-radio .st-emotion-cache-1wmy9hl { font-size: 26px !important; font-weight: 600 !important; }</style>", unsafe_allow_html=True)
+    st.markdown(
+        f"<h4 style='{TEXTOS['calc_menu_titulo_style']}'>{TEXTOS['calc_menu_titulo_texto']}</h4>", unsafe_allow_html=True)
 
-    submenu = st.radio("", TEXTOS["calc_menu_opcoes"], horizontal=True, key="menu_radio")
+    submenu = st.radio("", TEXTOS["calc_menu_opcoes"],
+                       horizontal=True, key="menu_radio")
     if submenu == "Variáveis":
         show_calculator_variables()
         return
 
-    st.markdown(f"<h3 style='{TEXTOS['calc_titulo_style']}'>{TEXTOS['calc_titulo_texto']}</h3>", unsafe_allow_html=True)
+    st.markdown(
+        f"<h3 style='{TEXTOS['calc_titulo_style']}'>{TEXTOS['calc_titulo_texto']}</h3>", unsafe_allow_html=True)
     with st.container(border=True):
         col1, col2 = st.columns(2)
         with col1:
             st.subheader(TEXTOS["calc_dados_base"])
-            quantidade_kg = st.number_input("Quantidade (KG)", min_value=0.1, format="%.2f", key="quantidade_kg", value=1.0)
-            preco_ps = st.number_input("Preço do PS (por KG)", min_value=0.0, format="%.2f", key="preco_ps")
-            valor_frete_kg = st.number_input("Valor do Frete (por KG)", min_value=0.0, format="%.2f", key="valor_frete_kg")
+            quantidade_kg = st.number_input(
+                "Quantidade (KG)", min_value=0.1, format="%.2f", key="quantidade_kg", value=1.0)
+            preco_ps = st.number_input(
+                "Preço do PS (por KG)", min_value=0.0, format="%.2f", key="preco_ps")
+            valor_frete_kg = st.number_input(
+                "Valor do Frete (por KG)", min_value=0.0, format="%.2f", key="valor_frete_kg")
         with col2:
             st.subheader(TEXTOS["calc_adicionais"])
-            tem_limpeza = st.radio("Limpeza/Granulação?", ["Não", "Sim"], key="tem_limpeza", horizontal=True)
-            valor_limpeza = st.number_input("Valor Limpeza/Gran. (por KG)", min_value=0.0, format="%.2f", key="valor_limpeza") if tem_limpeza == "Sim" else 0.0
-            tem_laminacao = st.radio("Laminação?", ["Não", "Sim"], key="tem_laminacao", horizontal=True)
-            valor_laminacao = st.number_input("Valor Laminação (por KG)", min_value=0.0, format="%.2f", key="valor_laminacao") if tem_laminacao == "Sim" else 0.0
-            tem_ipi = st.radio("IPI?", ["Não", "Sim"], key="tem_ipi", horizontal=True)
-            percent_ipi = st.number_input("% IPI", min_value=0.0, max_value=100.0, format="%.1f", key="percent_ipi") if tem_ipi == "Sim" else 0.0
+            tem_limpeza = st.radio(
+                "Limpeza/Granulação?", ["Não", "Sim"], key="tem_limpeza", horizontal=True)
+            valor_limpeza = st.number_input("Valor Limpeza/Gran. (por KG)", min_value=0.0,
+                                            format="%.2f", key="valor_limpeza") if tem_limpeza == "Sim" else 0.0
+            tem_laminacao = st.radio(
+                "Laminação?", ["Não", "Sim"], key="tem_laminacao", horizontal=True)
+            valor_laminacao = st.number_input("Valor Laminação (por KG)", min_value=0.0,
+                                              format="%.2f", key="valor_laminacao") if tem_laminacao == "Sim" else 0.0
+            tem_ipi = st.radio(
+                "IPI?", ["Não", "Sim"], key="tem_ipi", horizontal=True)
+            percent_ipi = st.number_input(
+                "% IPI", min_value=0.0, max_value=100.0, format="%.1f", key="percent_ipi") if tem_ipi == "Sim" else 0.0
 
     st.divider()
 
@@ -111,7 +134,8 @@ def show_price_calculator():
         custo_efetivo_30 = (1 - perda_30) * preco1_com_ipi + perda_30 * preco2
         custo_efetivo_29 = (1 - perda_29) * preco1_com_ipi + perda_29 * preco2
 
-        custo_total_processado = quantidade_kg * ((1 - perda_50) * preco1_com_ipi + perda_50 * preco2)
+        custo_total_processado = quantidade_kg * \
+            ((1 - perda_50) * preco1_com_ipi + perda_50 * preco2)
         preco_por_kg_efetivo = custo_total_processado / quantidade_kg
 
         custo_placa_50 = peso_50x50 * custo_efetivo_50
@@ -121,7 +145,8 @@ def show_price_calculator():
         st.subheader(TEXTOS["calc_resultado"])
         res_col1, res_col2 = st.columns(2)
         with res_col1:
-            st.metric("Custo Total Processado", f"R$ {custo_total_processado:.2f}")
+            st.metric("Custo Total Processado",
+                      f"R$ {custo_total_processado:.2f}")
             st.metric("Preço Efetivo por KG", f"R$ {preco_por_kg_efetivo:.2f}")
         with res_col2:
             st.metric("Custo Placa 50x50", f"R$ {custo_placa_50:.4f}")
