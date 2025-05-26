@@ -538,322 +538,197 @@ CALC_VARS = {
 }
 
 
+def get_calc_var(name):
+    conn = get_connection()
+    c = conn.cursor()
+    row = c.execute(
+        "SELECT value FROM production_variables WHERE name = ?", (name,)).fetchone()
+    conn.close()
+    return row[0] if row else None
+
+
 def show_calculator_variables():
-    st.subheader("Variáveis da Calculadora (Definidas pelo Usuário)")
-    for label in CALC_VARS:
-        CALC_VARS[label] = st.number_input(
-            label, min_value=0.0, value=CALC_VARS[label], format="%.2f")
+    st.subheader("Gerenciar Pesos e Perdas por Tipo de Placa")
 
+    default_vals = {
+        "peso_50x50": 137.0, "perda_50x50": 10.0,
+        "peso_30x30": 44.0,  "perda_30x30": 8.0,
+        "peso_29x29": 40.0,  "perda_29x29": 7.0,
+    }
 
-# --- Cálculo de preço (v6 - Layout Aprimorado) ---
+    with st.expander("Resetar para valores padrão"):
+        if st.button("Resetar Variáveis", type="primary"):
+            conn = get_connection()
+            c = conn.cursor()
+            for var, val in default_vals.items():
+                c.execute(
+                    "SELECT id FROM production_variables WHERE name = ?", (var,))
+                if c.fetchone():
+                    c.execute(
+                        "UPDATE production_variables SET value = ? WHERE name = ?", (val, var))
+                else:
+                    c.execute(
+                        "INSERT INTO production_variables (name, value) VALUES (?, ?) ", (var, val))
+            conn.commit()
+            conn.close()
+            st.success("Variáveis redefinidas para os valores padrão.")
+            st.rerun()
+
+    placas = [
+        ("50x50cm", "peso_50x50", "perda_50x50"),
+        ("30x30cm", "peso_30x30", "perda_30x30"),
+        ("29x29cm", "peso_29x29", "perda_29x29"),
+    ]
+
+    aba_labels = [f"Placa {p[0]}" for p in placas]
+    st.markdown(
+        "<h4 style='font-size:24px; margin-bottom:-70px;'>Selecionar Placa</h4>",
+        unsafe_allow_html=True
+    )
+    aba = st.radio("", aba_labels, horizontal=True)
+    index = aba_labels.index(aba)
+    label, peso_key, perda_key = placas[index]
+
+    peso_atual = get_calc_var(peso_key) or 0.0
+    perda_atual = get_calc_var(perda_key) or 0.0
+
+    with st.form(key=f"form_{label}"):
+        col1, col2 = st.columns(2)
+        with col1:
+            novo_peso = st.number_input(
+                "Peso (g)", min_value=0.0, value=peso_atual, format="%.2f", key=f"peso_{label}")
+        with col2:
+            nova_perda = st.number_input(
+                "% de Perda", min_value=0.0, max_value=100.0, value=perda_atual, format="%.2f", key=f"perda_{label}")
+        salvar = st.form_submit_button("Salvar")
+        if salvar:
+            conn = get_connection()
+            c = conn.cursor()
+            for key, val in [(peso_key, novo_peso), (perda_key, nova_perda)]:
+                c.execute(
+                    "SELECT id FROM production_variables WHERE name = ?", (key,))
+                if c.fetchone():
+                    c.execute(
+                        "UPDATE production_variables SET value = ? WHERE name = ?", (val, key))
+                else:
+                    c.execute(
+                        "INSERT INTO production_variables (name, value) VALUES (?, ?)", (key, val))
+            conn.commit()
+            conn.close()
+            st.success(f"Valores da placa {label} atualizados.")
+            st.rerun()
 
 
 def show_price_calculator():
-    submenu = st.radio("Menu da Calculadora", [
-                       "Calcular Preço", "Variáveis"], horizontal=True)
+    # Estilo global para deixar os botões do radio maiores
+    st.markdown("""
+    <style>
+        .big-radio .st-emotion-cache-1wmy9hl {
+            font-size: 26px !important;
+            font-weight: 600 !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Título estilizado
+    st.markdown(
+        "<h6 style='font-size:28px; margin-bottom:-80px;'>Menu da Calculadora</h6>",
+        unsafe_allow_html=True
+    )
+
+    # Radio com classe customizada
+    with st.container():
+        submenu = st.radio(
+            label="",
+            options=["Calcular Preço", "Variáveis"],
+            horizontal=True,
+            key="menu_radio"
+        )
+
     if submenu == "Variáveis":
         show_calculator_variables()
         return
-    st.header("Calculadora de Preços")
 
+    st.header("Calculadora de Preços")
     with st.container(border=True):
         col1, col2 = st.columns(2)
         with col1:
             st.subheader("Dados Base")
-            # Ordem ajustada: Quantidade primeiro
             quantidade_kg = st.number_input(
                 "Quantidade (KG)", min_value=0.1, format="%.2f", key="quantidade_kg", value=1.0)
             preco_ps = st.number_input(
                 "Preço do PS (por KG)", min_value=0.0, format="%.2f", key="preco_ps")
             valor_frete_kg = st.number_input(
                 "Valor do Frete (por KG)", min_value=0.0, format="%.2f", key="valor_frete_kg")
-            percent_perdas = st.number_input(
-                "% de Perdas", min_value=0.0, max_value=100.0, format="%.1f", key="percent_perdas", value=5.0)
         with col2:
             st.subheader("Custos Adicionais")
             tem_limpeza = st.radio(
                 "Limpeza/Granulação?", ["Não", "Sim"], key="tem_limpeza", horizontal=True)
-            valor_limpeza = 0.0
-            if tem_limpeza == "Sim":
-                valor_limpeza = st.number_input(
-                    "Valor Limpeza/Gran. (por KG)", min_value=0.0, format="%.2f", key="valor_limpeza")
-
+            valor_limpeza = st.number_input("Valor Limpeza/Gran. (por KG)", min_value=0.0,
+                                            format="%.2f", key="valor_limpeza") if tem_limpeza == "Sim" else 0.0
             tem_laminacao = st.radio(
                 "Laminação?", ["Não", "Sim"], key="tem_laminacao", horizontal=True)
-            valor_laminacao = 0.0
-            if tem_laminacao == "Sim":
-                valor_laminacao = st.number_input(
-                    "Valor Laminação (por KG)", min_value=0.0, format="%.2f", key="valor_laminacao")
-
+            valor_laminacao = st.number_input("Valor Laminação (por KG)", min_value=0.0,
+                                              format="%.2f", key="valor_laminacao") if tem_laminacao == "Sim" else 0.0
             tem_ipi = st.radio(
                 "IPI?", ["Não", "Sim"], key="tem_ipi", horizontal=True)
-            percent_ipi = 0.0
-            if tem_ipi == "Sim":
-                percent_ipi = st.number_input(
-                    "% IPI", min_value=0.0, max_value=100.0, format="%.1f", key="percent_ipi")
+            percent_ipi = st.number_input(
+                "% IPI", min_value=0.0, max_value=100.0, format="%.1f", key="percent_ipi") if tem_ipi == "Sim" else 0.0
 
     st.divider()
 
     if st.button("Calcular Preços", key="calcular_preco_final", use_container_width=True):
-        # --- Obter valores dos inputs ---
-        q_total = quantidade_kg
-        p_ps = preco_ps
-        p_frete_kg = valor_frete_kg  # Já é por KG conforme alteração anterior
-        percent_perdas_val = percent_perdas
-        percent_ipi_val = percent_ipi if tem_ipi == "Sim" else 0
-        limpeza_sim = tem_limpeza == "Sim"
-        laminacao_sim = tem_laminacao == "Sim"
-
-        # --- Obter valores das variáveis da calculadora ---
         try:
-            peso_50x50_g = CALC_VARS["Placa 50x50cm (g)"]
-            peso_30x30_g = CALC_VARS["Placa 30x30cm (g)"]
-            peso_29x29_g = CALC_VARS["Placa 29x29cm (g)"]
-        except KeyError as e:
+            peso_50x50 = get_calc_var("peso_50x50") / 1000.0
+            peso_30x30 = get_calc_var("peso_30x30") / 1000.0
+            peso_29x29 = get_calc_var("peso_29x29") / 1000.0
+            perda_50 = get_calc_var("perda_50x50") / 100.0
+            perda_30 = get_calc_var("perda_30x30") / 100.0
+            perda_29 = get_calc_var("perda_29x29") / 100.0
+        except Exception as e:
             st.error(
-                f"Erro: Variável da calculadora não encontrada: {e}. Verifique a seção 'Variáveis'.")
-            st.stop()
+                "Erro ao buscar variáveis de peso ou perda. Verifique se foram definidas.")
+            return
 
-        # Converter pesos para KG
-        peso_50x50_kg = peso_50x50_g / 1000.0
-        peso_30x30_kg = peso_30x30_g / 1000.0
-        peso_29x29_kg = peso_29x29_g / 1000.0
-
-        # --- Lógica de Cálculo ---
-        if q_total <= 0:
+        if quantidade_kg <= 0:
             st.error("Erro: Quantidade (KG) deve ser maior que zero.")
-        elif percent_perdas_val >= 100:
-            st.error("Erro: Percentual de perdas não pode ser 100% ou maior.")
-        else:
-            # 1. Preço1 (Preço Base + Frete por KG)
-            preco1 = p_ps + p_frete_kg
+            return
 
-            # 2. Aplicar IPI
-            preco1_com_ipi = preco1 * (1 + percent_ipi_val / 100.0)
+        preco1 = preco_ps + valor_frete_kg
+        preco1_com_ipi = preco1 * (1 + percent_ipi / 100.0)
+        preco2 = preco1_com_ipi + (valor_limpeza if tem_limpeza == "Sim" else 0) + (
+            valor_laminacao if tem_laminacao == "Sim" else 0)
 
-            # 3. Preço2 (Preço com IPI + Custos Adicionais)
-            preco2 = preco1_com_ipi
-            if limpeza_sim:
-                preco2 += valor_limpeza
-            if laminacao_sim:
-                preco2 += valor_laminacao
+        # custo médio por tipo de placa
+        custo_efetivo_50 = (
+            (1 - perda_50) * preco1_com_ipi) + (perda_50 * preco2)
+        custo_efetivo_30 = (
+            (1 - perda_30) * preco1_com_ipi) + (perda_30 * preco2)
+        custo_efetivo_29 = (
+            (1 - perda_29) * preco1_com_ipi) + (perda_29 * preco2)
 
-            # 4. Separar Quantidades
-            p = percent_perdas_val / 100.0
-            q_reutilizado = q_total * p
-            q_normal = q_total * (1 - p)
+        custo_total_processado = quantidade_kg * \
+            ((1 - perda_50) * preco1_com_ipi + perda_50 * preco2)  # base: 50x50
 
-            # 5. Calcular Custo Total Processado
-            custo_total_processado = (
-                preco1_com_ipi * q_normal) + (preco2 * q_reutilizado)
+        preco_por_kg_efetivo = custo_total_processado / quantidade_kg
 
-            # 6. Calcular Preço por KG Efetivo
-            preco_por_kg_efetivo = custo_total_processado / q_total
+        custo_placa_50 = peso_50x50 * custo_efetivo_50
+        custo_placa_30 = peso_30x30 * custo_efetivo_30
+        custo_placa_29 = peso_29x29 * custo_efetivo_29
 
-            # 7. Calcular Custo de Cada Placa
-            custo_placa_50x50 = peso_50x50_kg * preco_por_kg_efetivo
-            custo_placa_30x30 = peso_30x30_kg * preco_por_kg_efetivo
-            custo_placa_29x29 = peso_29x29_kg * preco_por_kg_efetivo
-
-            # --- Exibir Resultados ---
-            st.subheader("Resultado do Cálculo")
-            res_col1, res_col2 = st.columns(2)
-            with res_col1:
-                st.metric("Custo Total Processado",
-                          f"R$ {custo_total_processado:.2f}")
-                st.metric("Preço Efetivo por KG",
-                          f"R$ {preco_por_kg_efetivo:.2f}")
-            with res_col2:
-                # Mais casas decimais para custo unitário
-                st.metric("Custo Placa 50x50cm", f"R$ {custo_placa_50x50:.4f}")
-                st.metric("Custo Placa 30x30cm", f"R$ {custo_placa_30x30:.4f}")
-                st.metric("Custo Placa 29x29cm", f"R$ {custo_placa_29x29:.4f}")
-
+        st.subheader("Resultado do Cálculo")
+        res_col1, res_col2 = st.columns(2)
+        with res_col1:
+            st.metric("Custo Total Processado",
+                      f"R$ {custo_total_processado:.2f}")
+            st.metric("Preço Efetivo por KG", f"R$ {preco_por_kg_efetivo:.2f}")
+        with res_col2:
+            st.metric("Custo Placa 50x50", f"R$ {custo_placa_50:.4f}")
+            st.metric("Custo Placa 30x30", f"R$ {custo_placa_30:.4f}")
+            st.metric("Custo Placa 29x29", f"R$ {custo_placa_29:.4f}")
     else:
         st.subheader("Resultado do Cálculo")
         st.info("Preencha os campos acima e clique em calcular.")
-
-
-# --- Funções de interface (v7 - Correções Forms/Layout) --- #
-
-def manage_categories(item_type):
-    st.subheader(f"Gerenciar Categorias de {item_type.capitalize()}s")
-
-    col1, col2 = st.columns([3, 1])
-
-    with col1:
-        st.markdown("**Categorias Existentes**")
-        search_term = st.text_input(
-            "Filtrar por nome", key=f"search_cat_{item_type}")
-
-        if f"page_cat_{item_type}" not in st.session_state:
-            st.session_state[f"page_cat_{item_type}"] = 1
-
-        current_page = st.session_state[f"page_cat_{item_type}"]
-        categories, total_pages, total_items = get_categories(
-            item_type, search_term, current_page)
-
-        if categories:
-            st.write(
-                f"Mostrando {len(categories)} de {total_items} categorias.")
-            for cat_id, cat_name in categories:
-                # Usar st.expander para cada categoria
-                with st.expander(f"{cat_name}"):
-                    # Estado 1: Formulário de Edição
-                    if st.session_state.get(f"editing_cat_{cat_id}"):
-                        with st.form(key=f"edit_cat_form_{cat_id}"):
-                            st.markdown("**Editar Nome da Categoria**")
-                            new_name = st.text_input(
-                                "Novo nome", value=cat_name, key=f"edit_cat_name_{cat_id}", label_visibility="collapsed")
-                            edit_btn_cols = st.columns(2)
-                            with edit_btn_cols[0]:
-                                submitted_save = st.form_submit_button(
-                                    "Salvar")
-                            with edit_btn_cols[1]:
-                                submitted_cancel = st.form_submit_button(
-                                    "Cancelar", type="secondary")
-                            if submitted_save:
-                                if new_name and new_name.strip():
-                                    if new_name.strip() != cat_name:
-                                        success, error_message = update_category(
-                                            cat_id, new_name.strip())
-                                        if success:
-                                            st.success(
-                                                f"Categoria \'{new_name.strip()}\' atualizada com sucesso!")
-                                            st.session_state[f"editing_cat_{cat_id}"] = False
-                                            st.rerun()
-                                        else:
-                                            st.error(
-                                                error_message if error_message else "Falha ao atualizar categoria.")
-                                    else:
-                                        # Nome não mudou, apenas fechar o form
-                                        st.session_state[f"editing_cat_{cat_id}"] = False
-                                        st.rerun()
-                                else:
-                                    st.warning(
-                                        "O nome da categoria não pode ficar vazio.")
-                            if submitted_cancel:
-                                st.session_state[f"editing_cat_{cat_id}"] = False
-                                st.rerun()
-                    # Estado 2: Confirmação de Exclusão
-                    elif st.session_state.get(f"confirm_delete_cat_{cat_id}"):
-                        st.warning(
-                            f"Tem certeza que deseja deletar a categoria \'{cat_name}\'? Itens associados (produtos/variáveis) ficarão sem categoria.")
-                        confirm_cols = st.columns([1, 1], gap='small')
-                        with confirm_cols[0]:
-                            if st.button("Confirmar Exclusão", key=f"confirm_del_btn_{cat_id}", use_container_width=True):
-                                # Trata retorno (success, error_message)
-                                success, error_message = delete_category(
-                                    cat_id)
-                                if success:
-                                    # Mensagem de sucesso
-                                    st.success(
-                                        f"Categoria \'{cat_name}\' deletada com sucesso!")
-                                    st.session_state[f"confirm_delete_cat_{cat_id}"] = False
-                                    # Resetar paginação para evitar página vazia após exclusão do último item
-                                    # -1 porque um foi deletado
-                                    remaining_items_on_page = len(
-                                        categories) - 1
-                                    items_before_this_page = (
-                                        current_page - 1) * ITEMS_PER_PAGE
-                                    total_items_after_delete = total_items - 1
-                                    if remaining_items_on_page == 0 and items_before_this_page >= total_items_after_delete and current_page > 1:
-                                        st.session_state[f"page_cat_{item_type}"] = current_page - 1
-                                    st.rerun()
-                                else:
-                                    st.error(
-                                        error_message if error_message else "Falha ao deletar categoria.")
-                                    # Resetar estado mesmo em caso de erro para não travar
-                                    st.session_state[f"confirm_delete_cat_{cat_id}"] = False
-                                    st.rerun()  # Rerun para mostrar erro e limpar estado de confirmação
-                        with confirm_cols[1]:
-                            if st.button("Cancelar", key=f"cancel_del_btn_{cat_id}", type="secondary", use_container_width=True):
-                                st.session_state[f"confirm_delete_cat_{cat_id}"] = False
-                                st.rerun()
-
-                    # Estado 3: Botões de Ação Padrão (Dentro do Expander)
-                    else:
-                        st.markdown(
-                            "<div class=\"action-buttons-container\">", unsafe_allow_html=True)
-                        action_cols = st.columns([1, 1], gap="small")
-                        with action_cols[0]:
-                            if st.button("Editar", key=f"edit_cat_{cat_id}", use_container_width=True):
-                                st.session_state[f"editing_cat_{cat_id}"] = True
-                                # Garantir limpeza
-                                st.session_state[f"confirm_delete_cat_{cat_id}"] = False
-                                st.rerun()
-                        with action_cols[1]:
-                            if st.button("Deletar", key=f"delete_cat_{cat_id}", use_container_width=True):
-                                st.session_state[f"confirm_delete_cat_{cat_id}"] = True
-                                # Garantir limpeza
-                                st.session_state[f"editing_cat_{cat_id}"] = False
-                                st.rerun()
-                        st.markdown("</div>", unsafe_allow_html=True)
-            st.divider()
-            new_page = pagination_component(
-                total_pages, current_page, f"cat_{item_type}")
-            if new_page != current_page:
-                st.session_state[f"page_cat_{item_type}"] = new_page
-                st.rerun()
-
-        else:
-            st.info(f"Nenhuma categoria de {item_type} encontrada" + (
-                f" com o termo \'{search_term}\'" if search_term else "."))
-
-    with col2:
-        with st.form(key=f"add_{item_type}_category_form"):
-            st.subheader("Adicionar Nova")
-            new_cat_name = st.text_input(
-                "Nome da Categoria", label_visibility="visible", placeholder="Nome da Categoria")
-            submitted = st.form_submit_button("Adicionar Categoria")
-            if submitted:
-                if new_cat_name:
-                    category_id = add_category(new_cat_name, item_type)
-                    if category_id is not None:
-                        st.rerun()
-                else:
-                    st.warning("Digite um nome para a categoria.")
-
-
-def select_category(item_type, current_category_id=None, key_prefix="", allow_none=True):
-    conn = get_connection()
-    c = conn.cursor()
-    categories_list = c.execute(
-        "SELECT id, name FROM categories WHERE type = ? ORDER BY name", (item_type,)).fetchall()
-    conn.close()
-
-    category_options = {name: id for id, name in categories_list}
-    category_names = list(category_options.keys())
-
-    options_list = []
-    if allow_none:
-        options_list.append("Sem Categoria")
-    options_list.extend(category_names)
-
-    default_index = 0
-    selected_cat_name = None
-    if current_category_id:
-        for name, id_ in category_options.items():
-            if id_ == current_category_id:
-                selected_cat_name = name
-                break
-
-    if selected_cat_name and selected_cat_name in options_list:
-        default_index = options_list.index(selected_cat_name)
-    elif not current_category_id and allow_none and "Sem Categoria" in options_list:
-        default_index = options_list.index("Sem Categoria")
-
-    selected_option = st.selectbox(
-        "Categoria",
-        options=options_list,
-        index=default_index,
-        key=f"{key_prefix}_select_cat_{item_type}"
-    )
-
-    if selected_option == "Sem Categoria":
-        return None
-    else:
-        return category_options.get(selected_option)
 
 
 def show_production_costs():
