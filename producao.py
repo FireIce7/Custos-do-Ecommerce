@@ -419,6 +419,8 @@ def show_products():
         st.session_state.prod_page = 1
     if 'editing_prod_id' not in st.session_state:
         st.session_state.editing_prod_id = None
+    if 'show_prod_form' not in st.session_state:
+        st.session_state.show_prod_form = False
 
     # Filtros e Adição
     col1, col2, col3 = st.columns([3, 2, 1])
@@ -434,12 +436,22 @@ def show_products():
         category_id_filter = categoria_opts_display[selected_category_name]
     with col3:
         st.write("&nbsp;")  # Espaçamento
-        if st.button("➕ Adicionar Produto", key="add_prod_btn", use_container_width=True):
-            st.session_state.editing_prod_id = 'new'
+        # Modificado para alternar o estado do formulário
+        btn_label = "➕ Adicionar Produto" if not st.session_state.show_prod_form else "❌ Fechar Formulário"
+        if st.button(btn_label, key="add_prod_btn", use_container_width=True):
+            # Toggle do estado do formulário
+            st.session_state.show_prod_form = not st.session_state.show_prod_form
+            if st.session_state.show_prod_form:
+                st.session_state.editing_prod_id = 'new'
+            else:
+                st.session_state.editing_prod_id = None
+            st.rerun()
 
     # Formulário de Adição/Edição (dentro de um expander ou modal simulado)
     if st.session_state.editing_prod_id:
-        with st.expander("Adicionar/Editar Produto", expanded=True):
+        with st.container(border=True):
+            st.markdown(
+                "<h3 style='text-align: center;'>Adicionar/Editar Produto</h3>", unsafe_allow_html=True)
             is_new = st.session_state.editing_prod_id == 'new'
             prod_data = None
             if not is_new:
@@ -451,6 +463,7 @@ def show_products():
                 if not prod_data:
                     st.error("Produto não encontrado.")
                     st.session_state.editing_prod_id = None
+                    st.session_state.show_prod_form = False
                     st.rerun()
 
             default_name = prod_data[0] if prod_data else ""
@@ -475,7 +488,12 @@ def show_products():
                 selected_cat_name_form = st.selectbox(
                     "Categoria", options=cat_options_list, index=default_cat_index)
 
-                submitted = st.form_submit_button("Salvar")
+                # Centralizar botões do formulário
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    submitted = st.form_submit_button(
+                        "Salvar", use_container_width=True)
+
                 if submitted:
                     # Obter ID da categoria selecionada
                     new_cat_id = None
@@ -498,10 +516,16 @@ def show_products():
 
                         if success:
                             st.session_state.editing_prod_id = None
+                            st.session_state.show_prod_form = False
                             st.rerun()
-            if st.button("Cancelar", key="cancel_prod_edit"):
-                st.session_state.editing_prod_id = None
-                st.rerun()
+
+            # Botão Cancelar fora do formulário mas centralizado
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                if st.button("Cancelar", key="cancel_prod_edit", use_container_width=True):
+                    st.session_state.editing_prod_id = None
+                    st.session_state.show_prod_form = False
+                    st.rerun()
 
     # Listagem de Produtos
     st.markdown("--- ")
@@ -522,7 +546,9 @@ def show_products():
             with st.container(border=True):
                 col1, col2 = st.columns([3, 1])
                 with col1:
-                    st.subheader(name)
+                    # Aumentar tamanho da fonte para o nome do produto
+                    st.markdown(
+                        f"<h3 style='margin-bottom: 0px;'>{name}</h3>", unsafe_allow_html=True)
                     if cat_name:
                         st.caption(f"Categoria: {cat_name}")
                     else:
@@ -546,6 +572,7 @@ def show_products():
                     st.write("&nbsp;")
                     if st.button("✏️ Editar", key=f"edit_prod_{prod_id}", use_container_width=True):
                         st.session_state.editing_prod_id = prod_id
+                        st.session_state.show_prod_form = True
                         st.rerun()
                     if st.button("🗑️ Deletar", key=f"del_prod_{prod_id}", type="primary", use_container_width=True):
                         if delete_product(prod_id):
@@ -574,6 +601,8 @@ def show_variables():
         st.session_state.var_page = 1
     if 'editing_var_id' not in st.session_state:
         st.session_state.editing_var_id = None
+    if 'show_var_form' not in st.session_state:
+        st.session_state.show_var_form = False
 
     # Filtros e Adição
     col1, col2, col3 = st.columns([3, 2, 1])
@@ -589,12 +618,22 @@ def show_variables():
         category_id_filter = categoria_opts_display[selected_category_name]
     with col3:
         st.write("&nbsp;")
-        if st.button("➕ Adicionar Variável", key="add_var_btn", use_container_width=True):
-            st.session_state.editing_var_id = 'new'
+        # Modificado para alternar o estado do formulário
+        btn_label = "➕ Adicionar Variável" if not st.session_state.show_var_form else "❌ Fechar Formulário"
+        if st.button(btn_label, key="add_var_btn", use_container_width=True):
+            # Toggle do estado do formulário
+            st.session_state.show_var_form = not st.session_state.show_var_form
+            if st.session_state.show_var_form:
+                st.session_state.editing_var_id = 'new'
+            else:
+                st.session_state.editing_var_id = None
+            st.rerun()
 
     # Formulário de Adição/Edição
     if st.session_state.editing_var_id:
-        with st.expander("Adicionar/Editar Variável", expanded=True):
+        with st.container(border=True):
+            st.markdown(
+                "<h3 style='text-align: center;'>Adicionar/Editar Variável</h3>", unsafe_allow_html=True)
             is_new = st.session_state.editing_var_id == 'new'
             var_data = None
             if not is_new:
@@ -605,6 +644,7 @@ def show_variables():
                 if not var_data:
                     st.error("Variável não encontrada.")
                     st.session_state.editing_var_id = None
+                    st.session_state.show_var_form = False
                     st.rerun()
 
             default_name = var_data[0] if var_data else ""
@@ -629,7 +669,12 @@ def show_variables():
                 selected_cat_name_form = st.selectbox(
                     "Categoria", options=cat_options_list, index=default_cat_index)
 
-                submitted = st.form_submit_button("Salvar")
+                # Centralizar botões do formulário
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    submitted = st.form_submit_button(
+                        "Salvar", use_container_width=True)
+
                 if submitted:
                     new_cat_id = None
                     if selected_cat_name_form != "(Nenhuma)":
@@ -650,10 +695,16 @@ def show_variables():
 
                         if success:
                             st.session_state.editing_var_id = None
+                            st.session_state.show_var_form = False
                             st.rerun()
-            if st.button("Cancelar", key="cancel_var_edit"):
-                st.session_state.editing_var_id = None
-                st.rerun()
+
+            # Botão Cancelar fora do formulário mas centralizado
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                if st.button("Cancelar", key="cancel_var_edit", use_container_width=True):
+                    st.session_state.editing_var_id = None
+                    st.session_state.show_var_form = False
+                    st.rerun()
 
     # Listagem de Variáveis
     st.markdown("--- ")
@@ -673,7 +724,9 @@ def show_variables():
             with st.container(border=True):
                 col1, col2, col3 = st.columns([3, 2, 1])
                 with col1:
-                    st.subheader(name)
+                    # Aumentar tamanho da fonte para o nome da variável
+                    st.markdown(
+                        f"<h3 style='margin-bottom: 0px;'>{name}</h3>", unsafe_allow_html=True)
                     if cat_name:
                         st.caption(f"Categoria: {cat_name}")
                     else:
@@ -684,6 +737,7 @@ def show_variables():
                     st.write("&nbsp;")  # Espaçamento
                     if st.button("✏️ Editar", key=f"edit_var_{var_id}", use_container_width=True):
                         st.session_state.editing_var_id = var_id
+                        st.session_state.show_var_form = True
                         st.rerun()
                     if st.button("🗑️ Deletar", key=f"del_var_{var_id}", type="primary", use_container_width=True):
                         if delete_variable(var_id):
@@ -711,6 +765,8 @@ def show_categories():
         st.session_state.cat_page = 1
     if 'editing_cat_id' not in st.session_state:
         st.session_state.editing_cat_id = None
+    if 'show_cat_form' not in st.session_state:
+        st.session_state.show_cat_form = False
 
     # Filtro e Adição
     col1, col2 = st.columns([3, 1])
@@ -718,12 +774,22 @@ def show_categories():
         search_term = st.text_input("Buscar Categoria", key="cat_search")
     with col2:
         st.write("&nbsp;")
-        if st.button("➕ Adicionar Categoria", key="add_cat_btn", use_container_width=True):
-            st.session_state.editing_cat_id = 'new'
+        # Modificado para alternar o estado do formulário
+        btn_label = "➕ Adicionar Categoria" if not st.session_state.show_cat_form else "❌ Fechar Formulário"
+        if st.button(btn_label, key="add_cat_btn", use_container_width=True):
+            # Toggle do estado do formulário
+            st.session_state.show_cat_form = not st.session_state.show_cat_form
+            if st.session_state.show_cat_form:
+                st.session_state.editing_cat_id = 'new'
+            else:
+                st.session_state.editing_cat_id = None
+            st.rerun()
 
     # Formulário de Adição/Edição
     if st.session_state.editing_cat_id:
-        with st.expander("Adicionar/Editar Categoria", expanded=True):
+        with st.container(border=True):
+            st.markdown(
+                "<h3 style='text-align: center;'>Adicionar/Editar Categoria</h3>", unsafe_allow_html=True)
             is_new = st.session_state.editing_cat_id == 'new'
             cat_data = None
             if not is_new:
@@ -734,6 +800,7 @@ def show_categories():
                 if not cat_data:
                     st.error("Categoria não encontrada.")
                     st.session_state.editing_cat_id = None
+                    st.session_state.show_cat_form = False
                     st.rerun()
 
             default_name = cat_data[0] if cat_data else ""
@@ -741,24 +808,36 @@ def show_categories():
             with st.form(key="cat_edit_form"):
                 new_name = st.text_input(
                     "Nome da Categoria", value=default_name)
-                submitted = st.form_submit_button("Salvar")
+
+                # Centralizar botões do formulário
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    submitted = st.form_submit_button(
+                        "Salvar", use_container_width=True)
+
                 if submitted:
                     if not new_name:
                         st.warning("Nome da categoria é obrigatório.")
                     else:
                         success = False
                         if is_new:
-                            success = add_category(new_name)
+                            success = bool(add_category(new_name))
                         else:
                             success = update_category(
                                 st.session_state.editing_cat_id, new_name)
 
                         if success:
                             st.session_state.editing_cat_id = None
+                            st.session_state.show_cat_form = False
                             st.rerun()
-            if st.button("Cancelar", key="cancel_cat_edit"):
-                st.session_state.editing_cat_id = None
-                st.rerun()
+
+            # Botão Cancelar fora do formulário mas centralizado
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                if st.button("Cancelar", key="cancel_cat_edit", use_container_width=True):
+                    st.session_state.editing_cat_id = None
+                    st.session_state.show_cat_form = False
+                    st.rerun()
 
     # Listagem de Categorias
     st.markdown("--- ")
@@ -770,24 +849,27 @@ def show_categories():
         st.rerun()
 
     if not categories and st.session_state.editing_cat_id is None:
-        st.info("Nenhuma categoria encontrada." if not search_term else "Nenhuma categoria encontrada com os filtros aplicados.")
+        st.info("Nenhuma categoria encontrada." if not search_term else
+                "Nenhuma categoria encontrada com o filtro aplicado.")
     else:
         st.write(f"Total de Categorias: {total_items}")
         for cat_id, name in categories:
             with st.container(border=True):
-                col1, col2 = st.columns([4, 1])
+                col1, col2 = st.columns([3, 1])
                 with col1:
+                    # Aumentar tamanho da fonte para o nome da categoria
                     st.markdown(
-                        f"<span class='category-list-item'>{name}</span>", unsafe_allow_html=True)
+                        f"<h3 style='margin-bottom: 0px;'>{name}</h3>", unsafe_allow_html=True)
                 with col2:
-                    # Botões lado a lado
-                    btn_cols = st.columns(2)
-                    with btn_cols[0]:
-                        if st.button("✏️", key=f"edit_cat_{cat_id}", help="Editar Categoria", use_container_width=True):
+                    # Agrupar botões de editar e deletar mais próximos
+                    btn_col1, btn_col2 = st.columns(2)
+                    with btn_col1:
+                        if st.button("✏️", key=f"edit_cat_{cat_id}", use_container_width=True):
                             st.session_state.editing_cat_id = cat_id
+                            st.session_state.show_cat_form = True
                             st.rerun()
-                    with btn_cols[1]:
-                        if st.button("🗑️", key=f"del_cat_{cat_id}", help="Deletar Categoria", type="primary", use_container_width=True):
+                    with btn_col2:
+                        if st.button("🗑️", key=f"del_cat_{cat_id}", type="primary", use_container_width=True):
                             if delete_category(cat_id):
                                 new_total_items = total_items - 1
                                 new_total_pages = math.ceil(
@@ -825,3 +907,48 @@ def show_production_costs():
         show_variables()
     elif menu == "Gerenciar Categorias":
         show_categories()
+
+# Adicionar CSS personalizado para melhorar a aparência
+
+
+def add_custom_css():
+    st.markdown("""
+    <style>
+    /* Melhorar espaçamento e alinhamento dos botões */
+    div.stButton > button {
+        font-weight: bold;
+        border-radius: 4px;
+        height: 2.5em;
+        margin-top: 0.5em;
+    }
+    
+    /* Centralizar texto nos botões */
+    div.stButton > button p {
+        text-align: center;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    
+    /* Melhorar aparência dos containers */
+    div[data-testid="stExpander"] {
+        border-radius: 4px;
+    }
+    
+    /* Ajustar tamanho de fonte para títulos */
+    h3 {
+        font-size: 1.5em !important;
+    }
+    
+    /* Melhorar espaçamento da paginação */
+    .pagination-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin: 1em 0;
+    }
+    </style>
+    """, unsafe_allow_html=True)
