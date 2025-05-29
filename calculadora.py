@@ -127,8 +127,7 @@ def show_price_calculator():
             st.error("Erro ao buscar variáveis de peso ou perda.")
             return
 
-        preco1 = preco_ps + valor_frete_kg
-        preco1_com_ipi = preco1 * (1 + percent_ipi / 100.0)
+        preco1_com_ipi = preco_ps * (1 + percent_ipi / 100.0) + valor_frete_kg
         preco2 = preco1_com_ipi + valor_limpeza + valor_laminacao
 
         custo_efetivo_50 = (1 - perda_50) * preco1_com_ipi + perda_50 * preco2
