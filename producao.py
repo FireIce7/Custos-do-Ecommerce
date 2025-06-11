@@ -176,6 +176,7 @@ def show_products():
         with st.container():
             is_new = st.session_state.editing_prod_id=='new'
             data = None
+            sb = get_supabase_client()
             if not is_new:
                 prod = sb.table("produtos").select("*").eq("id", st.session_state.editing_prod_id).single().execute().data
                 if prod: data = prod
@@ -221,3 +222,47 @@ def show_production_costs():
     choice = st.radio("", TEXTOS["prod_menu_opcoes"], horizontal=True, key="prod_menu_radio", label_visibility="collapsed")
     if choice=="Produtos": show_products()
     # omit other tabs for brevity
+
+
+def get_all_variables_as_dict():
+    sb = get_supabase_client()
+    try:
+        data = sb.table("variaveis_custos").select("nome, valor").execute().data
+        return {item["nome"]: item["valor"] for item in data}
+    except Exception as e:
+        st.error(f"Erro ao buscar todas as variáveis: {e}")
+        return {}
+
+
+
+
+def calculate_cost(formula):
+    try:
+        variables = get_all_variables_as_dict()
+        # Substituir nomes de variáveis na fórmula pelos seus valores
+        # A regex procura por palavras que não são operadores ou números
+        # e que não estão entre aspas
+        # Isso é uma simplificação e pode precisar ser mais robusto
+        # dependendo da complexidade das fórmulas esperadas.
+        def replace_var(match):
+            var_name = match.group(0)
+            if var_name in variables:
+                return str(variables[var_name])
+            else:
+                st.warning(f"Variável '{var_name}' não encontrada no banco de dados.")
+                return "0.0" # Retorna 0.0 para variáveis não encontradas
+
+        # Usar re.sub para substituir todas as ocorrências de variáveis
+        # A regex r'\b[a-zA-Z_][a-zA-Z0-9_]*\b' corresponde a nomes de variáveis válidos em Python
+        processed_formula = re.sub(r'\b[a-zA-Z_][a-zA-Z0-9_]*\b', replace_var, formula)
+
+        # Avaliar a fórmula processada
+        return eval(processed_formula)
+    except NameError as ne:
+        st.error(f"Erro na fórmula: Variável não definida - {ne}")
+        return None
+    except Exception as e:
+        st.error(f"Erro ao calcular custo: {e}")
+        return None
+
+
