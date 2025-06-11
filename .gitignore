@@ -1,0 +1,5 @@
+/venv
+database.db
+*.db
+*.pyc
+creds.json
