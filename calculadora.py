@@ -28,9 +28,11 @@ def show_calculator_variables():
     sb = get_supabase_client()
     with st.expander(TEXTOS["calc_resetar"]):
         if st.button(TEXTOS["calc_resetar"], type="primary"):
-            sb.table("variaveis_calc")\
-                .update({"valor": 0})\
-                .execute()
+            for nome, valor in default_vals.items():
+                sb.table("variaveis_calc").upsert(
+                    {"nome": nome, "valor": valor},
+                    on_conflict="nome",
+                ).execute()
             st.success("Variáveis redefinidas para os valores padrão.")
             st.rerun()
 
