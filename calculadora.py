@@ -9,7 +9,10 @@ def get_calc_var(name):
         res = sb.table("variaveis_custos").select(
             "valor").eq("nome", name).single().execute()
         if isinstance(res.data, dict):
-            return res.data.get("valor", 0.0)
+            try:
+                return float(res.data.get("valor", 0.0))
+            except (TypeError, ValueError):
+                return 0.0
         return 0.0
     except Exception:
         return 0.0
@@ -50,8 +53,8 @@ def show_calculator_variables():
                       labels, horizontal=True, label_visibility="collapsed")
     idx = labels.index(choice)
     label, peso_key, perda_key = placas[idx]
-    peso_val = get_calc_var(peso_key)
-    perda_val = get_calc_var(perda_key)
+    peso_val = float(get_calc_var(peso_key))
+    perda_val = float(get_calc_var(perda_key))
 
     with st.form(key=f"form_{label}"):
         col1, col2 = st.columns(2)
@@ -110,8 +113,8 @@ def show_price_calculator():
     st.divider()
     if st.button(TEXTOS["calc_botao"], use_container_width=True):
         try:
-            peso_50 = get_calc_var("peso_50x50")/1000
-            perda_50 = get_calc_var("perda_50x50")/100
+            peso_50 = float(get_calc_var("peso_50x50"))/1000
+            perda_50 = float(get_calc_var("perda_50x50"))/100
             preco1 = preco_ps*(1+percent_ipi/100)+valor_frete_kg
             preco2 = preco1+valor_limpeza+valor_laminacao
             custo_placa50 = peso_50*((1-perda_50)*preco1+perda_50*preco2)
