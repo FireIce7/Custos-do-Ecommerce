@@ -10,7 +10,7 @@ ITEMS_PER_PAGE = 10
 def add_category(name):
     sb = get_supabase_client()
     try:
-        res = sb.table("categorias").insert({"nome": name}).execute()
+        res = sb.table("categorias_custos").insert({"nome": name}).execute()
         st.success(f"Categoria '{name}' adicionada.")
         return res.data[0]["id"]
     except Exception as e:
@@ -22,7 +22,7 @@ def get_categories(search_term="", page=1):
     sb = get_supabase_client()
     offset = (page-1)*ITEMS_PER_PAGE
     try:
-        q = sb.table("categorias").select("*")
+        q = sb.table("categorias_custos").select("*")
         if search_term:
             q = q.ilike("nome", f"%{search_term}%")
         data = q.execute().data or []
@@ -37,7 +37,7 @@ def get_categories(search_term="", page=1):
 def update_category(cat_id, new_name):
     sb = get_supabase_client()
     try:
-        sb.table("categorias").update(
+        sb.table("categorias_custos").update(
             {"nome": new_name}).eq("id", cat_id).execute()
         st.success("Categoria atualizada.")
         return True
@@ -51,12 +51,12 @@ def delete_category(cat_id):
     try:
         in_var = sb.table("variaveis_custos").select("id").eq(
             "categoria_id", cat_id).limit(1).execute().data
-        in_prod = sb.table("produtos").select("id").eq(
+        in_prod = sb.table("produtos_custos").select("id").eq(
             "categoria_id", cat_id).limit(1).execute().data
         if in_var or in_prod:
             st.error("Não pode deletar, categoria em uso.")
             return False
-        sb.table("categorias").delete().eq("id", cat_id).execute()
+        sb.table("categorias_custos").delete().eq("id", cat_id).execute()
         st.success("Categoria deletada.")
         return True
     except Exception as e:
@@ -68,7 +68,7 @@ def get_variables(category_id=None, search_term="", page=1):
     sb = get_supabase_client()
     offset = (page-1)*ITEMS_PER_PAGE
     try:
-        q = sb.table("variaveis_custos").select("*, categorias(nome)")
+        q = sb.table("variaveis_custos").select("*, categorias_custos(nome)")
         if category_id == "none":
             q = q.is_("categoria_id", None)
         elif category_id not in (None, "all"):
@@ -126,7 +126,7 @@ def get_products(category_id=None, search_term="", page=1):
     sb = get_supabase_client()
     offset = (page-1)*ITEMS_PER_PAGE
     try:
-        q = sb.table("produtos").select("*, categorias(nome)")
+        q = sb.table("produtos_custos").select("*, categorias_custos(nome)")
         if category_id == "none":
             q = q.is_("categoria_id", None)
         elif category_id not in (None, "all"):
@@ -148,7 +148,7 @@ def get_products(category_id=None, search_term="", page=1):
 def add_product(name, formula, category_id):
     sb = get_supabase_client()
     try:
-        sb.table("produtos").insert(
+        sb.table("produtos_custos").insert(
             {"nome": name, "formula": formula, "categoria_id": category_id}).execute()
         st.success(f"Produto '{name}' adicionado.")
         return True
@@ -160,7 +160,7 @@ def add_product(name, formula, category_id):
 def update_product(prod_id, name, formula, category_id):
     sb = get_supabase_client()
     try:
-        sb.table("produtos").update(
+        sb.table("produtos_custos").update(
             {"nome": name, "formula": formula, "categoria_id": category_id}).eq("id", prod_id).execute()
         st.success("Produto atualizado.")
         return True
@@ -172,7 +172,7 @@ def update_product(prod_id, name, formula, category_id):
 def delete_product(prod_id):
     sb = get_supabase_client()
     try:
-        sb.table("produtos").delete().eq("id", prod_id).execute()
+        sb.table("produtos_custos").delete().eq("id", prod_id).execute()
         st.success("Produto deletado.")
         return True
     except Exception as e:
@@ -210,7 +210,7 @@ def show_products():
             data = {}  # Initialize data as an empty dictionary
             sb = get_supabase_client()
             if not is_new:
-                prod_result = sb.table("produtos").select(
+                prod_result = sb.table("produtos_custos").select(
                     "*").eq("id", st.session_state.editing_prod_id).single().execute()
                 if prod_result and prod_result.data:
                     data = prod_result.data
@@ -421,7 +421,7 @@ def show_categories():
             data = {}  # Initialize data as an empty dictionary
             sb = get_supabase_client()
             if not is_new:
-                cat_result = sb.table("categorias").select(
+                cat_result = sb.table("categorias_custos").select(
                     "*").eq("id", st.session_state.editing_cat_id).single().execute()
                 if cat_result and cat_result.data:
                     data = cat_result.data

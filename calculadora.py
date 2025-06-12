@@ -6,7 +6,7 @@ from supabase_db import get_supabase_client
 def get_calc_var(name):
     sb = get_supabase_client()
     try:
-        res = sb.table("variaveis_custos").select(
+        res = sb.table("variaveis_calc").select(
             "valor").eq("nome", name).single().execute()
         if isinstance(res.data, dict):
             try:
@@ -28,16 +28,9 @@ def show_calculator_variables():
     sb = get_supabase_client()
     with st.expander(TEXTOS["calc_resetar"]):
         if st.button(TEXTOS["calc_resetar"], type="primary"):
-            for var, val in default_vals.items():
-                r = sb.table("variaveis_custos").select(
-                    "id").eq("nome", var).execute()
-                data = r.data or []
-                if isinstance(data, list) and data:
-                    sb.table("variaveis_custos").update(
-                        {"valor": val}).eq("nome", var).execute()
-                else:
-                    sb.table("variaveis_custos").insert(
-                        {"nome": var, "valor": val}).execute()
+            sb.table("variaveis_calc")\
+                .update({"valor": 0})\
+                .execute()
             st.success("Variáveis redefinidas para os valores padrão.")
             st.rerun()
 
@@ -67,8 +60,8 @@ def show_calculator_variables():
         if st.form_submit_button("Salvar"):
             for key, val in [(peso_key, novo_peso), (perda_key, nova_perda)]:
                 try:
-                    sb.table("variaveis_custos").upsert(
-                        {"nome": key, "valor": val}).execute()
+                    sb.table("variaveis_calc").upsert(
+                        {"nome": key, "valor": val}, on_conflict="nome").execute()
                     st.success(f"Valores da placa {label} atualizados.")
                 except Exception as e:
                     st.error(f"Erro ao salvar variável '{key}': {e}")
