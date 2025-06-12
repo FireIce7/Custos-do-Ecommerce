@@ -7,9 +7,9 @@ def get_calc_var(name):
     sb = get_supabase_client()
     try:
         res = sb.table("variaveis_custos").select(
-            "value").eq("name", name).single().execute()
+            "valor").eq("nome", name).single().execute()
         if isinstance(res.data, dict):
-            return res.data.get("value", 0.0)
+            return res.data.get("valor", 0.0)
         return 0.0
     except Exception:
         return 0.0
@@ -27,14 +27,14 @@ def show_calculator_variables():
         if st.button(TEXTOS["calc_resetar"], type="primary"):
             for var, val in default_vals.items():
                 r = sb.table("variaveis_custos").select(
-                    "id").eq("name", var).execute()
+                    "id").eq("nome", var).execute()
                 data = r.data or []
                 if isinstance(data, list) and data:
                     sb.table("variaveis_custos").update(
-                        {"value": val}).eq("name", var).execute()
+                        {"valor": val}).eq("nome", var).execute()
                 else:
                     sb.table("variaveis_custos").insert(
-                        {"name": var, "value": val}).execute()
+                        {"nome": var, "valor": val}).execute()
             st.success("Variáveis redefinidas para os valores padrão.")
             st.rerun()
 
@@ -65,10 +65,10 @@ def show_calculator_variables():
             for key, val in [(peso_key, novo_peso), (perda_key, nova_perda)]:
                 try:
                     sb.table("variaveis_custos").upsert(
-                        {"name": key, "value": val}).execute()
+                        {"nome": key, "valor": val}).execute()
                     st.success(f"Valores da placa {label} atualizados.")
                 except Exception as e:
-                    st.error(f"Erro ao salvar variável \'{key}\': {e}")
+                    st.error(f"Erro ao salvar variável '{key}': {e}")
             st.rerun()
 
 
