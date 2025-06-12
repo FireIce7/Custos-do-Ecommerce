@@ -2,15 +2,18 @@ import streamlit as st
 from textos import TEXTOS
 from supabase_db import get_supabase_client
 
+
 def get_calc_var(name):
     sb = get_supabase_client()
     try:
-        res = sb.table("production_variables").select("value").eq("name", name).single().execute()
+        res = sb.table("variaveis_custos").select(
+            "value").eq("name", name).single().execute()
         if isinstance(res.data, dict):
             return res.data.get("value", 0.0)
         return 0.0
     except Exception:
         return 0.0
+
 
 def show_calculator_variables():
     st.subheader(TEXTOS["var_titulo"])
@@ -23,12 +26,15 @@ def show_calculator_variables():
     with st.expander(TEXTOS["calc_resetar"]):
         if st.button(TEXTOS["calc_resetar"], type="primary"):
             for var, val in default_vals.items():
-                r = sb.table("production_variables").select("id").eq("name", var).execute()
+                r = sb.table("variaveis_custos").select(
+                    "id").eq("name", var).execute()
                 data = r.data or []
                 if isinstance(data, list) and data:
-                    sb.table("production_variables").update({"value": val}).eq("name", var).execute()
+                    sb.table("variaveis_custos").update(
+                        {"value": val}).eq("name", var).execute()
                 else:
-                    sb.table("production_variables").insert({"name": var, "value": val}).execute()
+                    sb.table("variaveis_custos").insert(
+                        {"name": var, "value": val}).execute()
             st.success("Variáveis redefinidas para os valores padrão.")
             st.rerun()
 
@@ -38,8 +44,10 @@ def show_calculator_variables():
         ("25x25cm", "peso_25x25", "perda_25x25"),
     ]
     labels = [TEXTOS["var_placas"][p[0][:2]] for p in placas]
-    st.markdown(f"<h4 style='{TEXTOS['var_selecione_style']}'>{TEXTOS['var_selecione_texto']}</h4>", unsafe_allow_html=True)
-    choice = st.radio("Selecionar Placa para Editar Variáveis", labels, horizontal=True, label_visibility="collapsed")
+    st.markdown(
+        f"<h4 style='{TEXTOS['var_selecione_style']}'>{TEXTOS['var_selecione_texto']}</h4>", unsafe_allow_html=True)
+    choice = st.radio("Selecionar Placa para Editar Variáveis",
+                      labels, horizontal=True, label_visibility="collapsed")
     idx = labels.index(choice)
     label, peso_key, perda_key = placas[idx]
     peso_val = get_calc_var(peso_key)
@@ -48,42 +56,61 @@ def show_calculator_variables():
     with st.form(key=f"form_{label}"):
         col1, col2 = st.columns(2)
         with col1:
-            novo_peso = st.number_input("Peso (g)", min_value=0.0, value=peso_val, format="%.2f")
+            novo_peso = st.number_input(
+                "Peso (g)", min_value=0.0, value=peso_val, format="%.2f")
         with col2:
-            nova_perda = st.number_input("% de Perda", min_value=0.0, max_value=100.0, value=perda_val, format="%.2f")
+            nova_perda = st.number_input(
+                "% de Perda", min_value=0.0, max_value=100.0, value=perda_val, format="%.2f")
         if st.form_submit_button("Salvar"):
             for key, val in [(peso_key, novo_peso), (perda_key, nova_perda)]:
-                r = sb.table("production_variables").select("id").eq("name", key).execute()
+                r = sb.table("variaveis_custos").select(
+                    "id").eq("name", key).execute()
                 data = r.data or []
                 if isinstance(data, list) and data:
-                    sb.table("production_variables").update({"value": val}).eq("name", key).execute()
+                    sb.table("variaveis_custos").update(
+                        {"value": val}).eq("name", key).execute()
                 else:
-                    sb.table("production_variables").insert({"name": key, "value": val}).execute()
+                    sb.table("variaveis_custos").insert(
+                        {"name": key, "value": val}).execute()
             st.success(f"Valores da placa {label} atualizados.")
             st.rerun()
 
+
 def show_price_calculator():
-    st.markdown("<style>.big-radio .st-emotion-cache-1wmy9hl{font-size:26px!important;font-weight:600!important;}</style>", unsafe_allow_html=True)
-    st.markdown(f"<h4 style='{TEXTOS['calc_menu_titulo_style']}'>{TEXTOS['calc_menu_titulo_texto']}</h4>", unsafe_allow_html=True)
-    submenu = st.radio("Menu da Calculadora", TEXTOS["calc_menu_opcoes"], horizontal=True, key="menu_radio", label_visibility="collapsed")
+    st.markdown(
+        "<style>.big-radio .st-emotion-cache-1wmy9hl{font-size:26px!important;font-weight:600!important;}</style>", unsafe_allow_html=True)
+    st.markdown(
+        f"<h4 style='{TEXTOS['calc_menu_titulo_style']}'>{TEXTOS['calc_menu_titulo_texto']}</h4>", unsafe_allow_html=True)
+    submenu = st.radio("Menu da Calculadora", TEXTOS["calc_menu_opcoes"],
+                       horizontal=True, key="menu_radio", label_visibility="collapsed")
     if submenu == "Variáveis":
         show_calculator_variables()
         return
 
-    st.markdown(f"<h3 style='{TEXTOS['calc_titulo_style']}'>{TEXTOS['calc_titulo_texto']}</h3>", unsafe_allow_html=True)
+    st.markdown(
+        f"<h3 style='{TEXTOS['calc_titulo_style']}'>{TEXTOS['calc_titulo_texto']}</h3>", unsafe_allow_html=True)
     with st.container():
         col1, col2 = st.columns(2)
         with col1:
-            preco_ps = st.number_input("Preço do PS (por KG)", min_value=0.0, format="%.2f", key="preco_ps")
-            quantidade_kg = st.number_input("Quantidade (KG)", min_value=0.1, format="%.2f", key="quantidade_kg", value=1.0)
-            valor_frete_kg = st.number_input("Valor do Frete (por KG)", min_value=0.0, format="%.2f", key="valor_frete_kg")
+            preco_ps = st.number_input(
+                "Preço do PS (por KG)", min_value=0.0, format="%.2f", key="preco_ps")
+            quantidade_kg = st.number_input(
+                "Quantidade (KG)", min_value=0.1, format="%.2f", key="quantidade_kg", value=1.0)
+            valor_frete_kg = st.number_input(
+                "Valor do Frete (por KG)", min_value=0.0, format="%.2f", key="valor_frete_kg")
         with col2:
-            tem_limpeza = st.radio("Limpeza/Granulação?", ["Não", "Sim"], key="tem_limpeza", horizontal=True)
-            valor_limpeza = st.number_input("Valor Limpeza/Gran. (por KG)", min_value=0.0, format="%.2f", key="valor_limpeza") if tem_limpeza=="Sim" else 0.0
-            tem_laminacao = st.radio("Laminação?", ["Não", "Sim"], key="tem_laminacao", horizontal=True)
-            valor_laminacao = st.number_input("Valor Laminação (por KG)", min_value=0.0, format="%.2f", key="valor_laminacao") if tem_laminacao=="Sim" else 0.0
-            tem_ipi = st.radio("IPI?", ["Não", "Sim"], key="tem_ipi", horizontal=True)
-            percent_ipi = st.number_input("% IPI", min_value=0.0, max_value=100.0, format="%.1f", key="percent_ipi") if tem_ipi=="Sim" else 0.0
+            tem_limpeza = st.radio(
+                "Limpeza/Granulação?", ["Não", "Sim"], key="tem_limpeza", horizontal=True)
+            valor_limpeza = st.number_input("Valor Limpeza/Gran. (por KG)", min_value=0.0,
+                                            format="%.2f", key="valor_limpeza") if tem_limpeza == "Sim" else 0.0
+            tem_laminacao = st.radio(
+                "Laminação?", ["Não", "Sim"], key="tem_laminacao", horizontal=True)
+            valor_laminacao = st.number_input("Valor Laminação (por KG)", min_value=0.0,
+                                              format="%.2f", key="valor_laminacao") if tem_laminacao == "Sim" else 0.0
+            tem_ipi = st.radio(
+                "IPI?", ["Não", "Sim"], key="tem_ipi", horizontal=True)
+            percent_ipi = st.number_input(
+                "% IPI", min_value=0.0, max_value=100.0, format="%.1f", key="percent_ipi") if tem_ipi == "Sim" else 0.0
     st.divider()
     if st.button(TEXTOS["calc_botao"], use_container_width=True):
         try:

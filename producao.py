@@ -116,7 +116,7 @@ def get_products(category_id=None, search_term="", page=1):
         total = len(data)
         pages = math.ceil(total/ITEMS_PER_PAGE) if total else 1
         rows = data[offset:offset+ITEMS_PER_PAGE]
-        formatted = [(r["id"],r["nome"],r.get("formula"),r["categoria_id"],r.get("categorias",{}).get("nome")) for r in rows]
+        formatted = [(r["id"],r["nome"],r.get("formula"),r["categoria_id"],(r.get("categorias") or {}).get("nome")) for r in rows]
         return formatted, pages, total
     except Exception as e:
         st.error(f"Erro ao buscar produtos: {e}")
@@ -175,14 +175,17 @@ def show_products():
     if st.session_state.editing_prod_id:
         with st.container():
             is_new = st.session_state.editing_prod_id=='new'
-            data = None
+            data = {} # Initialize data as an empty dictionary
             sb = get_supabase_client()
             if not is_new:
-                prod = sb.table("produtos").select("*").eq("id", st.session_state.editing_prod_id).single().execute().data
-                if prod: data = prod
-            name = data["nome"] if data else ""
-            formula = data["formula"] if data else ""
-            cat_sel = data["categoria_id"] if data else None
+                prod_result = sb.table("produtos").select("*").eq("id", st.session_state.editing_prod_id).single().execute()
+                if prod_result and prod_result.data:
+                    data = prod_result.data
+                else:
+                    data = {}
+            name = data.get("nome", "")
+            formula = data.get("formula", "")
+            cat_sel = data.get("categoria_id", None)
             form = st.form(key="prod_form")
             new_name = form.text_input("Nome do Produto", value=name)
             new_formula = form.text_area("Fórmula", value=formula)
@@ -221,7 +224,8 @@ def show_production_costs():
     st.subheader(TEXTOS["prod_titulo"])
     choice = st.radio("", TEXTOS["prod_menu_opcoes"], horizontal=True, key="prod_menu_radio", label_visibility="collapsed")
     if choice=="Produtos": show_products()
-    # omit other tabs for brevity
+    elif choice=="Variáveis de Custos": show_variables()
+    elif choice=="Gerenciar Categorias": show_categories()
 
 
 def get_all_variables_as_dict():
@@ -264,5 +268,140 @@ def calculate_cost(formula):
     except Exception as e:
         st.error(f"Erro ao calcular custo: {e}")
         return None
+
+
+
+
+def show_variables():
+    st.subheader(TEXTOS["prod_variaveis"])
+    if 'var_page' not in st.session_state: st.session_state.var_page = 1
+    if 'editing_var_id' not in st.session_state: st.session_state.editing_var_id = None
+    if 'show_var_form' not in st.session_state: st.session_state.show_var_form = False
+
+    col1, col2, col3 = st.columns([3,2,1])
+    with col1:
+        search = st.text_input("Buscar Variável", key="var_search")
+    with col2:
+        cats,_,_ = get_categories()
+        opts = {c["nome"]:c["id"] for c in cats}
+        disp = {"Todos":"all","Sem Categoria":"none",**opts}
+        selected = st.selectbox("Filtrar por Categoria", list(disp.keys()), key="var_cat_filter")
+        cat_id = disp[selected]
+    with col3:
+        label = "➕ Adicionar Variável" if not st.session_state.show_var_form else "❌ Fechar Formulário"
+        if st.button(label, key="add_var_btn"):
+            st.session_state.show_var_form = not st.session_state.show_var_form
+            st.session_state.editing_var_id = 'new' if st.session_state.show_var_form else None
+            st.rerun()
+
+    if st.session_state.editing_var_id:
+        with st.container():
+            is_new = st.session_state.editing_var_id == 'new'
+            data = {} # Initialize data as an empty dictionary
+            sb = get_supabase_client()
+            if not is_new:
+                var_result = sb.table("variaveis_custos").select("*").eq("id", st.session_state.editing_var_id).single().execute()
+                if var_result and var_result.data:
+                    data = var_result.data
+                else:
+                    data = {}
+            name = data.get("nome", "")
+            value = data.get("valor", 0.0)
+            cat_sel = data.get("categoria_id", None)
+
+            form = st.form(key="var_form")
+            new_name = form.text_input("Nome da Variável", value=name)
+            new_value = form.number_input("Valor", value=value, format="%.2f")
+            new_cat = form.selectbox("Categoria", ["(Nenhuma)"]+list(opts.keys()), index=0 if not cat_sel else list(opts.values()).index(cat_sel))
+
+            if form.form_submit_button("Salvar"):
+                cid = None if new_cat=="(Nenhuma)" else opts[new_cat]
+                if is_new:
+                    add_variable(new_name, new_value, cid)
+                else:
+                    update_variable(st.session_state.editing_var_id, new_name, new_value, cid)
+                st.session_state.show_var_form=False
+                st.session_state.editing_var_id=None
+                st.rerun()
+
+    data, pages, total = get_variables(category_id=cat_id, search_term=search, page=st.session_state.var_page)
+    st.write(f"Total de Variáveis: {total}")
+
+    for vid, name, value, cid, cname in data:
+        with st.container():
+            col1, col2 = st.columns([3,1])
+            with col1:
+                st.markdown(f"<h3>{name}</h3>", unsafe_allow_html=True)
+                if cname: st.caption(f"Categoria: {cname}")
+                st.metric("Valor", f"R$ {value:.2f}")
+            with col2:
+                if st.button("✏️", key=f"edit_var_{vid}"):
+                    st.session_state.editing_var_id=vid
+                    st.session_state.show_var_form=True
+                    st.rerun()
+                if st.button("🗑️", key=f"del_var_{vid}", type="primary"):
+                    delete_variable(vid)
+                    st.rerun()
+
+
+
+
+def show_categories():
+    st.subheader("Gerenciar Categorias")
+    if 'cat_page' not in st.session_state: st.session_state.cat_page = 1
+    if 'editing_cat_id' not in st.session_state: st.session_state.editing_cat_id = None
+    if 'show_cat_form' not in st.session_state: st.session_state.show_cat_form = False
+
+    col1, col2 = st.columns([2,1])
+    with col1:
+        search = st.text_input("Buscar Categoria", key="cat_search")
+    with col2:
+        label = "➕ Adicionar Categoria" if not st.session_state.show_cat_form else "❌ Fechar Formulário"
+        if st.button(label, key="add_cat_btn"):
+            st.session_state.show_cat_form = not st.session_state.show_cat_form
+            st.session_state.editing_cat_id = 'new' if st.session_state.show_cat_form else None
+            st.rerun()
+
+    if st.session_state.editing_cat_id:
+        with st.container():
+            is_new = st.session_state.editing_cat_id == 'new'
+            data = {} # Initialize data as an empty dictionary
+            sb = get_supabase_client()
+            if not is_new:
+                cat_result = sb.table("categorias").select("*").eq("id", st.session_state.editing_cat_id).single().execute()
+                if cat_result and cat_result.data:
+                    data = cat_result.data
+            name = data.get("nome", "")
+
+            form = st.form(key="cat_form")
+            new_name = form.text_input("Nome da Categoria", value=name)
+
+            if form.form_submit_button("Salvar"):
+                if is_new:
+                    add_category(new_name)
+                else:
+                    update_category(st.session_state.editing_cat_id, new_name)
+                st.session_state.show_cat_form=False
+                st.session_state.editing_cat_id=None
+                st.rerun()
+
+    data, pages, total = get_categories(search_term=search, page=st.session_state.cat_page)
+    st.write(f"Total de Categorias: {total}")
+
+    for category in data:
+        cid = category["id"]
+        name = category["nome"]
+        with st.container():
+            col1, col2 = st.columns([3,1])
+            with col1:
+                st.markdown(f"<h3>{name}</h3>", unsafe_allow_html=True)
+            with col2:
+                if st.button("✏️", key=f"edit_cat_{cid}"):
+                    st.session_state.editing_cat_id=cid
+                    st.session_state.show_cat_form=True
+                    st.rerun()
+                if st.button("🗑️", key=f"del_cat_{cid}", type="primary"):
+                    delete_category(cid)
+                    st.rerun()
 
 
