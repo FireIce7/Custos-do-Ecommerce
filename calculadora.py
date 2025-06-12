@@ -63,16 +63,12 @@ def show_calculator_variables():
                 "% de Perda", min_value=0.0, max_value=100.0, value=perda_val, format="%.2f")
         if st.form_submit_button("Salvar"):
             for key, val in [(peso_key, novo_peso), (perda_key, nova_perda)]:
-                r = sb.table("variaveis_custos").select(
-                    "id").eq("name", key).execute()
-                data = r.data or []
-                if isinstance(data, list) and data:
-                    sb.table("variaveis_custos").update(
-                        {"value": val}).eq("name", key).execute()
-                else:
-                    sb.table("variaveis_custos").insert(
+                try:
+                    sb.table("variaveis_custos").upsert(
                         {"name": key, "value": val}).execute()
-            st.success(f"Valores da placa {label} atualizados.")
+                    st.success(f"Valores da placa {label} atualizados.")
+                except Exception as e:
+                    st.error(f"Erro ao salvar variável \'{key}\': {e}")
             st.rerun()
 
 
