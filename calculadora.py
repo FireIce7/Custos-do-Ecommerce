@@ -5,82 +5,78 @@ import streamlit as st
 from supabase_db import SupabaseError
 
 
-def evaluate_formula(formula: str, all_variables: dict, all_products: dict, evaluated_products: dict = None):
-    if evaluated_products is None:
-        evaluated_products = {}
-
-    # Prevenir recursão infinita
-    if formula in evaluated_products:
-        return evaluated_products[formula]  # Retorna o valor já calculado
-
-    # Criar um dicionário de valores para avaliação da fórmula
-    # Inclui variáveis e produtos já avaliados
-    context = {**all_variables, **evaluated_products}
-
-    # Substituir nomes de variáveis/produtos na fórmula pelos seus valores
-    formula_to_evaluate = formula
-    for name, value in context.items():
-        # Garante que a substituição seja para o nome completo da variável/produto
-        # e não para substrings (ex: 'prod' em 'produto')
-        formula_to_evaluate = formula_to_evaluate.replace(name, str(value))
-
+def evaluate_formula(formula: str, context: dict):
+    """Avalia uma fórmula matemática dada um contexto de variáveis e produtos."""
     try:
-        # Avaliar a fórmula
-        # ATENÇÃO: eval() pode ser perigoso se a entrada não for controlada.
-        # Para este caso, assumimos que as fórmulas são inseridas por usuários confiáveis.
-        result = eval(formula_to_evaluate)
-        return result
+        # Usar eval com um dicionário de globals e locals para segurança e contexto
+        # math e operator são incluídos para permitir operações matemáticas e lógicas
+        safe_dict = {**context, **{"math": math, "operator": operator}}
+        return eval(formula, {"__builtins__": None}, safe_dict)
+    except (NameError, SyntaxError, TypeError) as e:
+        raise ValueError(f"Erro de sintaxe ou nome na fórmula: {e}")
     except Exception as e:
-        raise ValueError(f"Erro ao avaliar a fórmula '{formula}': {e}")
+        raise ValueError(f"Erro inesperado ao avaliar a fórmula: {e}")
 
 
-def calculate_product_cost(product_name: str, all_products: list, all_variables: list, evaluated_products: dict = None):
+def calculate_product_cost(product_name: str, all_products: list, all_variables: list, evaluated_products: dict = None, path: list = None):
+    """Calcula o custo de um produto, resolvendo dependências de outros produtos.
+    Detecta e previne dependências circulares.
+    """
     if evaluated_products is None:
         evaluated_products = {}
+    if path is None:
+        path = []
 
+    # Detectar dependência circular
+    if product_name in path:
+        raise ValueError(
+            f"Dependência circular detectada: {' -> '.join(path + [product_name])}")
+
+    # Retornar custo já calculado, se disponível
     if product_name in evaluated_products:
         return evaluated_products[product_name]
 
+    # Encontrar o produto
     product = next(
         (p for p in all_products if p["nome"] == product_name), None)
     if not product:
-        raise ValueError(f"Produto '{product_name}' não encontrado.")
+        raise ValueError(
+            f"Produto \'{product_name}\' não encontrado na lista de produtos.")
 
     formula = product["formula"]
 
-    # Marcar o produto como em avaliação para detectar dependências circulares
-    evaluated_products[product_name] = "_EVALUATING_"
+    # Adicionar produto ao caminho para detecção de ciclo
+    path.append(product_name)
 
     # Dicionário de variáveis para a avaliação
     variables_dict = {v["nome"]: v["custo"] for v in all_variables}
 
-    # Identificar produtos na fórmula
-    # Isso é uma simplificação. Uma análise de AST seria mais robusta.
-    # Por enquanto, assumimos que nomes de produtos/variáveis não se sobrepõem
-    # e são palavras completas.
-    sub_product_costs = {}
+    # Resolver sub-produtos na fórmula
+    context_for_eval = {**variables_dict}
     for p in all_products:
         if p["nome"] != product_name and p["nome"] in formula:
-            if evaluated_products.get(p["nome"]) == "_EVALUATING_":
-                raise ValueError(f"Dependência circular detectada: {product_name} -> {p["nome"]}")
-            sub_product_costs[p["nome"]] = calculate_product_cost(
-                p["nome"], all_products, all_variables, evaluated_products)
+            try:
+                sub_product_cost = calculate_product_cost(
+                    p["nome"], all_products, all_variables, evaluated_products, path)
+                context_for_eval[p["nome"]] = sub_product_cost
+            except ValueError as e:
+                # Propagar erro de sub-produto com contexto
+                raise ValueError(
+                    f"Erro ao calcular custo do sub-produto \'{p['nome']}\': {e}")
 
-    # Combinar variáveis e custos de sub-produtos para avaliação
-    evaluation_context = {**variables_dict, **sub_product_costs}
-
-    # Substituir nomes na fórmula pelos seus valores
-    resolved_formula = formula
-    for name, value in evaluation_context.items():
-        resolved_formula = resolved_formula.replace(name, str(value))
+    # Remover produto do caminho após avaliação
+    path.pop()
 
     try:
-        cost = eval(resolved_formula)
+        cost = evaluate_formula(formula, context_for_eval)
         evaluated_products[product_name] = cost
         return cost
+    except ValueError as e:
+        raise ValueError(
+            f"Erro ao calcular custo para \'{product_name}\' com fórmula \'{formula}\': {e}")
     except Exception as e:
         raise ValueError(
-            f"Erro ao calcular custo para '{product_name}' com fórmula '{formula}': {e}")
+            f"Erro inesperado ao calcular custo para \'{product_name}\': {e}")
 
 
 def calcular_custo(supabase_db):
@@ -88,8 +84,8 @@ def calcular_custo(supabase_db):
 
     try:
         produtos = supabase_db.get_all_produtos()
-        # Alterado para usar get_all_variaveis_calc() para a calculadora
-        variaveis = supabase_db.get_all_variaveis_calc()
+        # Mantendo get_all_variaveis() para o cálculo de custos de produtos
+        variaveis = supabase_db.get_all_variaveis()
     except SupabaseError as e:
         st.error(f"{TEXTOS["erro_carregar_dados"]} Detalhes: {e}")
         return

@@ -23,9 +23,7 @@ class SupabaseDB:
         try:
             response = query_func().execute()
             if response.data is None:
-                # Supabase retorna data vazia para algumas operações bem-sucedidas (ex: delete)
-                # ou para selects sem resultados. Ajustar conforme a necessidade.
-                return []  # Retorna lista vazia para selects sem resultados
+                return []
             return response.data
         except Exception as e:
             raise SupabaseError(f"{error_message}: {e}")
@@ -69,7 +67,7 @@ class SupabaseDB:
     def delete_variavel_calc(self, variavel_id):
         return self._execute_query(lambda: self.client.from_("variaveis_calc").delete().eq("id", variavel_id), "Erro ao deletar variável da calculadora")
 
-    # Métodos para Categorias de Produtos (categorias_produtos)
+    # NOVOS Métodos para Categorias de Produtos (categorias_produtos)
     def get_all_categorias_produtos(self):
         return self._execute_query(lambda: self.client.from_("categorias_produtos").select("*"), "Erro ao buscar categorias de produtos")
 
@@ -79,7 +77,7 @@ class SupabaseDB:
     def delete_categoria_produto(self, categoria_id):
         return self._execute_query(lambda: self.client.from_("categorias_produtos").delete().eq("id", categoria_id), "Erro ao deletar categoria de produto")
 
-    # Métodos para Categorias de Variáveis (categorias_variaveis)
+    # NOVOS Métodos para Categorias de Variáveis (categorias_variaveis)
     def get_all_categorias_variaveis(self):
         return self._execute_query(lambda: self.client.from_("categorias_variaveis").select("*"), "Erro ao buscar categorias de variáveis")
 

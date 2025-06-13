@@ -58,19 +58,17 @@ def gerenciar_producao(supabase_db):
                 st.write(f"Categoria: {produto["categoria"]}")
             with col2:
                 if st.button(TEXTOS["editar_produto_btn"], key=f"edit_prod_{produto["id"]}"):
-                    # Lógica para edição (a ser implementada ou expandida)
                     st.info("Funcionalidade de edição em desenvolvimento.")
             with col3:
                 if st.button(TEXTOS["excluir_produto_btn"], key=f"del_prod_{produto["id"]}"):
-                    if st.warning(TEXTOS["confirmar_exclusao_produto"]):
-                        try:
-                            supabase_db.delete_produto(produto["id"])
-                            st.success(TEXTOS["produto_excluido_sucesso"])
-                            st.experimental_rerun()
-                        except SupabaseError as e:
-                            st.error(f"{TEXTOS["erro_excluir_produto"]} Detalhes: {e}")
+                    try:
+                        supabase_db.delete_produto(produto["id"])
+                        st.success(TEXTOS["produto_excluido_sucesso"])
+                        st.experimental_rerun()
+                    except SupabaseError as e:
+                        st.error(f"{TEXTOS["erro_excluir_produto"]} Detalhes: {e}")
             with col4:
-                pass  # Espaço para futuras ações
+                pass
     else:
         st.info(TEXTOS["nenhum_produto_encontrado"])
 
@@ -124,19 +122,17 @@ def gerenciar_producao(supabase_db):
                 st.write(f"Categoria: {variavel["categoria"]}")
             with col2:
                 if st.button(TEXTOS["editar_variavel_btn"], key=f"edit_var_{variavel["id"]}"):
-                    # Lógica para edição (a ser implementada ou expandida)
                     st.info("Funcionalidade de edição em desenvolvimento.")
             with col3:
                 if st.button(TEXTOS["excluir_variavel_btn"], key=f"del_var_{variavel["id"]}"):
-                    if st.warning(TEXTOS["confirmar_exclusao_variavel"]):
-                        try:
-                            supabase_db.delete_variavel(variavel["id"])
-                            st.success(TEXTOS["variavel_excluida_sucesso"])
-                            st.experimental_rerun()
-                        except SupabaseError as e:
-                            st.error(f"{TEXTOS["erro_excluir_variavel"]} Detalhes: {e}")
+                    try:
+                        supabase_db.delete_variavel(variavel["id"])
+                        st.success(TEXTOS["variavel_excluida_sucesso"])
+                        st.experimental_rerun()
+                    except SupabaseError as e:
+                        st.error(f"{TEXTOS["erro_excluir_variavel"]} Detalhes: {e}")
             with col4:
-                pass  # Espaço para futuras ações
+                pass
     else:
         st.info(TEXTOS["nenhuma_variavel_encontrada"])
 
