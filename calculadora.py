@@ -1,4 +1,5 @@
 import streamlit as st
+import re
 from textos import TEXTOS
 from supabase_db import get_supabase_client
 
@@ -15,6 +16,7 @@ def get_calc_var(name):
                 return 0.0
         return 0.0
     except Exception:
+        # st.error(f"Erro ao buscar variável de cálculo: {e}")
         return 0.0
 
 
@@ -28,12 +30,10 @@ def show_calculator_variables():
     sb = get_supabase_client()
     with st.expander(TEXTOS["calc_resetar"]):
         if st.button(TEXTOS["calc_resetar"], type="primary"):
-            for nome, valor in default_vals.items():
-                sb.table("variaveis_calc").upsert(
-                    {"nome": nome, "valor": valor},
-                    on_conflict="nome",
-                ).execute()
-            st.success("Variáveis redefinidas para os valores padrão.")
+            if reset_calculator_variables_backend():
+                st.success("Variáveis redefinidas para os valores padrão.")
+            else:
+                st.error("Erro ao redefinir variáveis para os valores padrão.")
             st.rerun()
 
     placas = [
@@ -61,12 +61,10 @@ def show_calculator_variables():
                 "% de Perda", min_value=0.0, max_value=100.0, value=perda_val, format="%.2f")
         if st.form_submit_button("Salvar"):
             for key, val in [(peso_key, novo_peso), (perda_key, nova_perda)]:
-                try:
-                    sb.table("variaveis_calc").upsert(
-                        {"nome": key, "valor": val}, on_conflict="nome").execute()
-                    st.success(f"Valores da placa {label} atualizados.")
-                except Exception as e:
-                    st.error(f"Erro ao salvar variável '{key}': {e}")
+                if update_calc_variable(key, val):
+                    st.success(f"Variável \'{key}\' atualizada.")
+                else:
+                    st.error(f"Erro ao salvar variável \'{key}\'")
             st.rerun()
 
 
@@ -119,3 +117,79 @@ def show_price_calculator():
     else:
         st.subheader(TEXTOS["calc_resultado"])
         st.info(TEXTOS["calc_info"])
+
+
+def get_all_variables_as_dict():
+    sb = get_supabase_client()
+    try:
+        data = sb.table("variaveis_custos").select(
+            "nome, valor").execute().data
+        return {item["nome"]: item["valor"] for item in data}
+    except Exception as e:
+        # st.error(f"Erro ao buscar todas as variáveis: {e}")
+        return {}
+
+
+def calculate_cost(formula):
+    try:
+        variables = get_all_variables_as_dict()
+        # Substituir nomes de variáveis na fórmula pelos seus valores
+        # A regex procura por palavras que não são operadores ou números
+        # e que não estão entre aspas
+        # Isso é uma simplificação e pode precisar ser mais robusto
+        # dependendo da complexidade das fórmulas esperadas.
+
+        def replace_var(match):
+            var_name = match.group(0)
+            if var_name in variables:
+                return str(variables[var_name])
+            else:
+                # st.warning(
+                #     f"Variável \'{var_name}\' não encontrada no banco de dados.")
+                return "0.0"  # Retorna 0.0 para variáveis não encontradas
+
+        # Usar re.sub para substituir todas as ocorrências de variáveis
+        # A regex r'\b[a-zA-Z_][a-zA-Z0-9_]*\b' corresponde a nomes de variáveis válidos em Python
+        processed_formula = re.sub(
+            r'\b[a-zA-Z_][a-zA-Z0-9_]*\b', replace_var, formula)
+
+        # Avaliar a fórmula processada
+        return eval(processed_formula)
+    except NameError as ne:
+        # st.error(f"Erro na fórmula: Variável não definida - {ne}")
+        return None
+    except Exception as e:
+        # st.error(f"Erro ao calcular custo: {e}")
+        return None
+
+
+def update_calc_variable(name, value):
+    sb = get_supabase_client()
+    try:
+        sb.table("variaveis_calc").upsert(
+            {"nome": name, "valor": value},
+            on_conflict="nome",
+        ).execute()
+        return True
+    except Exception as e:
+        # st.error(f"Erro ao salvar variável \'{name}\': {e}")
+        return False
+
+
+def reset_calculator_variables_backend():
+    sb = get_supabase_client()
+    default_vals = {
+        "peso_50x50": 137.0, "perda_50x50": 10.0,
+        "peso_30x30": 44.0, "perda_30x30": 8.0,
+        "peso_25x25": 40.0, "perda_25x25": 7.0,
+    }
+    try:
+        for nome, valor in default_vals.items():
+            sb.table("variaveis_calc").upsert(
+                {"nome": nome, "valor": valor},
+                on_conflict="nome",
+            ).execute()
+        return True
+    except Exception as e:
+        # st.error(f"Erro ao redefinir variáveis: {e}")
+        return False

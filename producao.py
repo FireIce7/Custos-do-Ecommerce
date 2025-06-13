@@ -3,15 +3,18 @@ import re
 import math
 from textos import TEXTOS
 from supabase_db import get_supabase_client
+from calculadora import calculate_cost
 
 ITEMS_PER_PAGE = 10
 
 
 def add_category(name):
+    if not name:
+        st.error("O nome da categoria não pode ser vazio.")
+        return None
     sb = get_supabase_client()
     try:
         res = sb.table("categorias_custos").insert({"nome": name}).execute()
-        st.success(f"Categoria '{name}' adicionada.")
         return res.data[0]["id"]
     except Exception as e:
         st.error(f"Erro ao adicionar categoria: {e}")
@@ -30,16 +33,18 @@ def get_categories(search_term="", page=1):
         pages = math.ceil(total/ITEMS_PER_PAGE) if total else 1
         return data[offset:offset+ITEMS_PER_PAGE], pages, total
     except Exception as e:
-        st.error(f"Erro ao buscar categorias: {e}")
+        # st.error(f"Erro ao buscar categorias: {e}")
         return [], 1, 0
 
 
 def update_category(cat_id, new_name):
+    if not new_name:
+        st.error("O nome da categoria não pode ser vazio.")
+        return False
     sb = get_supabase_client()
     try:
         sb.table("categorias_custos").update(
             {"nome": new_name}).eq("id", cat_id).execute()
-        st.success("Categoria atualizada.")
         return True
     except Exception as e:
         st.error(f"Erro ao atualizar categoria: {e}")
@@ -57,10 +62,10 @@ def delete_category(cat_id):
             st.error("Não pode deletar, categoria em uso.")
             return False
         sb.table("categorias_custos").delete().eq("id", cat_id).execute()
-        st.success("Categoria deletada.")
+        # st.success("Categoria deletada.")
         return True
     except Exception as e:
-        st.error(f"Erro ao deletar categoria: {e}")
+        # st.error(f"Erro ao deletar categoria: {e}")
         return False
 
 
@@ -83,16 +88,21 @@ def get_variables(category_id=None, search_term="", page=1):
                       (r.get("categorias") or {}).get("nome")) for r in rows]
         return formatted, pages, total
     except Exception as e:
-        st.error(f"Erro ao buscar variáveis: {e}")
+        # st.error(f"Erro ao buscar variáveis: {e}")
         return [], 1, 0
 
 
 def add_variable(name, value, category_id):
+    if not name:
+        st.error("O nome da variável não pode ser vazio.")
+        return False
+    if value is None:
+        st.error("O valor da variável não pode ser vazio.")
+        return False
     sb = get_supabase_client()
     try:
         sb.table("variaveis_custos").insert(
             {"nome": name, "valor": value, "categoria_id": category_id}).execute()
-        st.success(f"Variável '{name}' adicionada.")
         return True
     except Exception as e:
         st.error(f"Erro ao adicionar variável: {e}")
@@ -100,11 +110,16 @@ def add_variable(name, value, category_id):
 
 
 def update_variable(var_id, name, value, category_id):
+    if not name:
+        st.error("O nome da variável não pode ser vazio.")
+        return False
+    if value is None:
+        st.error("O valor da variável não pode ser vazio.")
+        return False
     sb = get_supabase_client()
     try:
         sb.table("variaveis_custos").update(
             {"nome": name, "valor": value, "categoria_id": category_id}).eq("id", var_id).execute()
-        st.success("Variável atualizada.")
         return True
     except Exception as e:
         st.error(f"Erro ao atualizar variável: {e}")
@@ -115,10 +130,10 @@ def delete_variable(var_id):
     sb = get_supabase_client()
     try:
         sb.table("variaveis_custos").delete().eq("id", var_id).execute()
-        st.success("Variável deletada.")
+        # st.success("Variável deletada.")
         return True
     except Exception as e:
-        st.error(f"Erro ao deletar variável: {e}")
+        # st.error(f"Erro ao deletar variável: {e}")
         return False
 
 
@@ -141,16 +156,21 @@ def get_products(category_id=None, search_term="", page=1):
             "categorias") or {}).get("nome")) for r in rows]
         return formatted, pages, total
     except Exception as e:
-        st.error(f"Erro ao buscar produtos: {e}")
+        # st.error(f"Erro ao buscar produtos: {e}")
         return [], 1, 0
 
 
 def add_product(name, formula, category_id):
+    if not name:
+        st.error("O nome do produto não pode ser vazio.")
+        return False
+    if not formula:
+        st.error("A fórmula do produto não pode ser vazia.")
+        return False
     sb = get_supabase_client()
     try:
         sb.table("produtos_custos").insert(
             {"nome": name, "formula": formula, "categoria_id": category_id}).execute()
-        st.success(f"Produto '{name}' adicionado.")
         return True
     except Exception as e:
         st.error(f"Erro ao adicionar produto: {e}")
@@ -158,11 +178,16 @@ def add_product(name, formula, category_id):
 
 
 def update_product(prod_id, name, formula, category_id):
+    if not name:
+        st.error("O nome do produto não pode ser vazio.")
+        return False
+    if not formula:
+        st.error("A fórmula do produto não pode ser vazia.")
+        return False
     sb = get_supabase_client()
     try:
         sb.table("produtos_custos").update(
             {"nome": name, "formula": formula, "categoria_id": category_id}).eq("id", prod_id).execute()
-        st.success("Produto atualizado.")
         return True
     except Exception as e:
         st.error(f"Erro ao atualizar produto: {e}")
@@ -173,10 +198,10 @@ def delete_product(prod_id):
     sb = get_supabase_client()
     try:
         sb.table("produtos_custos").delete().eq("id", prod_id).execute()
-        st.success("Produto deletado.")
+        # st.success("Produto deletado.")
         return True
     except Exception as e:
-        st.error(f"Erro ao deletar produto: {e}")
+        # st.error(f"Erro ao deletar produto: {e}")
         return False
 
 
@@ -227,10 +252,16 @@ def show_products():
             if form.form_submit_button("Salvar"):
                 cid = None if new_cat == "(Nenhuma)" else opts[new_cat]
                 if is_new:
-                    add_product(new_name, new_formula, cid)
+                    if add_product(new_name, new_formula, cid):
+                        st.success(f"Produto \'{new_name}\' adicionado.")
+                    # else: # Erro já é exibido dentro de add_product
+                        # st.error(f"Erro ao adicionar produto \'{new_name}\'")
                 else:
-                    update_product(st.session_state.editing_prod_id,
-                                   new_name, new_formula, cid)
+                    if update_product(st.session_state.editing_prod_id,
+                                      new_name, new_formula, cid):
+                        st.success("Produto atualizado.")
+                    # else: # Erro já é exibido dentro de update_product
+                        # st.error("Erro ao atualizar produto.")
                 st.session_state.show_prod_form = False
                 st.session_state.editing_prod_id = None
                 st.rerun()
@@ -255,7 +286,10 @@ def show_products():
                     st.session_state.show_prod_form = True
                     st.rerun()
                 if st.button("🗑️", key=f"del_{pid}", type="primary"):
-                    delete_product(pid)
+                    if delete_product(pid):
+                        st.success("Produto deletado.")
+                    else:
+                        st.error("Erro ao deletar produto.")
                     st.rerun()
 
 
@@ -269,50 +303,6 @@ def show_production_costs():
         show_variables()
     elif choice == "Gerenciar Categorias":
         show_categories()
-
-
-def get_all_variables_as_dict():
-    sb = get_supabase_client()
-    try:
-        data = sb.table("variaveis_custos").select(
-            "nome, valor").execute().data
-        return {item["nome"]: item["valor"] for item in data}
-    except Exception as e:
-        st.error(f"Erro ao buscar todas as variáveis: {e}")
-        return {}
-
-
-def calculate_cost(formula):
-    try:
-        variables = get_all_variables_as_dict()
-        # Substituir nomes de variáveis na fórmula pelos seus valores
-        # A regex procura por palavras que não são operadores ou números
-        # e que não estão entre aspas
-        # Isso é uma simplificação e pode precisar ser mais robusto
-        # dependendo da complexidade das fórmulas esperadas.
-
-        def replace_var(match):
-            var_name = match.group(0)
-            if var_name in variables:
-                return str(variables[var_name])
-            else:
-                st.warning(
-                    f"Variável '{var_name}' não encontrada no banco de dados.")
-                return "0.0"  # Retorna 0.0 para variáveis não encontradas
-
-        # Usar re.sub para substituir todas as ocorrências de variáveis
-        # A regex r'\b[a-zA-Z_][a-zA-Z0-9_]*\b' corresponde a nomes de variáveis válidos em Python
-        processed_formula = re.sub(
-            r'\b[a-zA-Z_][a-zA-Z0-9_]*\b', replace_var, formula)
-
-        # Avaliar a fórmula processada
-        return eval(processed_formula)
-    except NameError as ne:
-        st.error(f"Erro na fórmula: Variável não definida - {ne}")
-        return None
-    except Exception as e:
-        st.error(f"Erro ao calcular custo: {e}")
-        return None
 
 
 def show_variables():
@@ -366,10 +356,16 @@ def show_variables():
             if form.form_submit_button("Salvar"):
                 cid = None if new_cat == "(Nenhuma)" else opts[new_cat]
                 if is_new:
-                    add_variable(new_name, new_value, cid)
+                    if add_variable(new_name, new_value, cid):
+                        st.success(f"Variável \'{new_name}\' adicionada.")
+                    # else: # Erro já é exibido dentro de add_variable
+                        # st.error(f"Erro ao adicionar variável \'{new_name}\'")
                 else:
-                    update_variable(
-                        st.session_state.editing_var_id, new_name, new_value, cid)
+                    if update_variable(
+                            st.session_state.editing_var_id, new_name, new_value, cid):
+                        st.success("Variável atualizada.")
+                    # else: # Erro já é exibido dentro de update_variable
+                        # st.error("Erro ao atualizar variável.")
                 st.session_state.show_var_form = False
                 st.session_state.editing_var_id = None
                 st.rerun()
@@ -392,7 +388,10 @@ def show_variables():
                     st.session_state.show_var_form = True
                     st.rerun()
                 if st.button("🗑️", key=f"del_var_{vid}", type="primary"):
-                    delete_variable(vid)
+                    if delete_variable(vid):
+                        st.success("Variável deletada.")
+                    else:
+                        st.error("Erro ao deletar variável.")
                     st.rerun()
 
 
@@ -432,9 +431,15 @@ def show_categories():
 
             if form.form_submit_button("Salvar"):
                 if is_new:
-                    add_category(new_name)
+                    if add_category(new_name):
+                        st.success(f"Categoria \'{new_name}\' adicionada.")
+                    else:
+                        st.error(f"Erro ao adicionar categoria \'{new_name}\'")
                 else:
-                    update_category(st.session_state.editing_cat_id, new_name)
+                    if update_category(st.session_state.editing_cat_id, new_name):
+                        st.success("Categoria atualizada.")
+                    else:
+                        st.error("Erro ao atualizar categoria.")
                 st.session_state.show_cat_form = False
                 st.session_state.editing_cat_id = None
                 st.rerun()
