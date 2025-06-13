@@ -1,46 +1,28 @@
 import streamlit as st
+from supabase_db import SupabaseDB, SupabaseError
+from producao import gerenciar_producao
+from calculadora import calcular_custo
 from textos import TEXTOS
-from calculadora import show_price_calculator
-from producao import show_production_costs
 
-st.set_page_config(page_title="Custos do Ecommerce", layout="wide")
 
-st.markdown("""
-<style>
-div.stButton > button {
-    font-weight: bold;
-    border-radius: 4px;
-    height: 2.5em;
-    margin-top: 0.5em;
-}
-div.stButton > button p {
-    text-align: center;
-    width: 100%;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-div[data-testid="stExpander"] {
-    border-radius: 4px;
-}
-h3 {
-    font-size: 1.5em !important;
-}
-.pagination-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin: 1em 0;
-}
-</style>
-""", unsafe_allow_html=True)
+def main():
+    st.set_page_config(layout="wide")
+    st.title(TEXTOS["titulo_app"])
 
-st.sidebar.title("Navegação")
-menu = st.sidebar.radio("Ir para:", TEXTOS["menu_lateral"])
+    try:
+        supabase_db = SupabaseDB()
+    except SupabaseError as e:
+        st.error(f"{TEXTOS["erro_conexao_db"]} Detalhes: {e}")
+        st.stop()  # Interrompe a execução se não conseguir conectar ao Supabase
 
-if menu == "Custos de Produção":
-    show_production_costs()
-elif menu == "Calculadora de Preços":
-    show_price_calculator()
+    menu = ["Gerenciar Produção", "Calcular Custo"]
+    choice = st.sidebar.selectbox("Menu", menu)
+
+    if choice == "Gerenciar Produção":
+        gerenciar_producao(supabase_db)
+    elif choice == "Calcular Custo":
+        calcular_custo(supabase_db)
+
+
+if __name__ == "__main__":
+    main()
