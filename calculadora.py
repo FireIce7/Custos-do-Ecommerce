@@ -64,14 +64,45 @@ def reset_calculator_variables_backend():
         for nome, valor in default_vals.items():
             sb.table("variaveis_calc").upsert(
                 {"nome": nome, "valor": valor},
-                on_conflict="nome",
+                on_conflict="nome"
             ).execute()
         return True
     except Exception as e:
         display_error(f"Erro ao redefinir variáveis: {e}", e)
         return False
 
-# --- UI: Gestão de Variáveis ---
+# --- Função de Cálculo de Fórmula ---
+
+
+def calculate_cost(formula: str):
+    """
+    Avalia a fórmula do produto substituindo variáveis de cálculo
+    pelos seus valores atuais e retornando o resultado numérico.
+    """
+    if not formula or not formula.strip():
+        return None
+    try:
+        expr = formula
+        # encontra todos os identificadores de variáveis
+        vars_found = set(re.findall(r"\b[a-zA-Z_]\w*\b", formula))
+        # substitui cada variável pelo seu valor
+        for var in vars_found:
+            # ignora termos não relacionados a variáveis
+            if var in ('and', 'or', 'not'):
+                continue
+            try:
+                val = get_calc_var(var)
+                expr = re.sub(rf"\b{var}\b", str(val), expr)
+            except Exception:
+                continue
+        # avalia a expressão em um ambiente restrito
+        result = eval(expr, {"__builtins__": {}}, {})
+        return float(result)
+    except Exception as e:
+        display_error(f"Erro ao calcular fórmula: {e}", e)
+        return None
+
+# --- UI: Gestão de Variáveis de Cálculo ---
 
 
 def show_calculator_variables():
@@ -93,10 +124,7 @@ def show_calculator_variables():
             else:
                 display_error(
                     "Erro ao redefinir variáveis para os valores padrão.")
-
-    for peso_key, perda_key in [("peso_50x50", "perda_50x50"),
-                                ("peso_30x30", "perda_30x30"),
-                                ("peso_25x25", "perda_25x25")]:
+    for peso_key, perda_key in [("peso_50x50", "perda_50x50"), ("peso_30x30", "perda_30x30"), ("peso_25x25", "perda_25x25")]:
         peso_val = default_vals[peso_key]
         perda_val = default_vals[perda_key]
         with st.form(key=f"form_{peso_key}"):
@@ -137,7 +165,6 @@ def show_price_calculator():
     if submenu == "Variáveis":
         show_calculator_variables()
         return
-
     st.markdown(
         f"<h3 style='{TEXTOS['calc_titulo_style']}'>{TEXTOS['calc_titulo_texto']}</h3>",
         unsafe_allow_html=True
@@ -146,51 +173,37 @@ def show_price_calculator():
         col1, col2 = st.columns(2)
         with col1:
             preco_ps = st.number_input(
-                "Preço do PS (por KG)", min_value=0.0, format="%.2f", key="preco_ps"
-            )
+                "Preço do PS (por KG)", min_value=0.0, format="%.2f", key="preco_ps")
             quantidade_kg = st.number_input(
-                "Quantidade (KG)", min_value=0.1, format="%.2f", key="quantidade_kg", value=1.0
-            )
+                "Quantidade (KG)", min_value=0.1, format="%.2f", key="quantidade_kg", value=1.0)
             valor_frete_kg = st.number_input(
-                "Valor do Frete (por KG)", min_value=0.0, format="%.2f", key="valor_frete_kg"
-            )
+                "Valor do Frete (por KG)", min_value=0.0, format="%.2f", key="valor_frete_kg")
         with col2:
             tem_limpeza = st.radio(
-                "Limpeza/Granulação?", ["Não", "Sim"], key="tem_limpeza", horizontal=True
-            )
-            valor_limpeza = st.number_input(
-                "Valor Limpeza/Gran. (por KG)", min_value=0.0, format="%.2f", key="valor_limpeza"
-            ) if tem_limpeza == "Sim" else 0.0
-
+                "Limpeza/Granulação?", ["Não", "Sim"], key="tem_limpeza", horizontal=True)
+            valor_limpeza = st.number_input("Valor Limpeza/Gran. (por KG)", min_value=0.0,
+                                            format="%.2f", key="valor_limpeza") if tem_limpeza == "Sim" else 0.0
             tem_laminacao = st.radio(
-                "Laminação?", ["Não", "Sim"], key="tem_laminacao", horizontal=True
-            )
-            valor_laminacao = st.number_input(
-                "Valor Laminação (por KG)", min_value=0.0, format="%.2f", key="valor_laminacao"
-            ) if tem_laminacao == "Sim" else 0.0
-
+                "Laminação?", ["Não", "Sim"], key="tem_laminacao", horizontal=True)
+            valor_laminacao = st.number_input("Valor Laminação (por KG)", min_value=0.0,
+                                              format="%.2f", key="valor_laminacao") if tem_laminacao == "Sim" else 0.0
             tem_ipi = st.radio(
-                "IPI?", ["Não", "Sim"], key="tem_ipi", horizontal=True
-            )
+                "IPI?", ["Não", "Sim"], key="tem_ipi", horizontal=True)
             percent_ipi = st.number_input(
-                "% IPI", min_value=0.0, max_value=100.0, format="%.1f", key="percent_ipi"
-            ) if tem_ipi == "Sim" else 0.0
-
+                "% IPI", min_value=0.0, max_value=100.0, format="%.1f", key="percent_ipi") if tem_ipi == "Sim" else 0.0
     st.divider()
     if st.button(TEXTOS["calc_botao"], use_container_width=True):
         try:
-            # busca variáveis de cálculo e converte unidades
+            # busca variáveis e converte unidades
             peso_50 = get_calc_var("peso_50x50") / 1000
             perda_50 = get_calc_var("perda_50x50") / 100
             peso_30 = get_calc_var("peso_30x30") / 1000
             perda_30 = get_calc_var("perda_30x30") / 100
             peso_25 = get_calc_var("peso_25x25") / 1000
             perda_25 = get_calc_var("perda_25x25") / 100
-
             # cálculo do preço base
             preco1 = preco_ps * (1 + percent_ipi / 100) + valor_frete_kg
             preco2 = preco1 + valor_limpeza + valor_laminacao
-
             # custos das placas
             custo_placa50 = peso_50 * \
                 ((1 - perda_50) * preco1 + perda_50 * preco2)
@@ -198,12 +211,10 @@ def show_price_calculator():
                 ((1 - perda_30) * preco1 + perda_30 * preco2)
             custo_placa25 = peso_25 * \
                 ((1 - perda_25) * preco1 + perda_25 * preco2)
-
-            # exibe todos os três resultados
+            # exibe
             st.metric("Custo Placa 50x50", f"R$ {custo_placa50:.4f}")
             st.metric("Custo Placa 30x30", f"R$ {custo_placa30:.4f}")
             st.metric("Custo Placa 25x25", f"R$ {custo_placa25:.4f}")
-
         except Exception as e:
             display_error(f"Erro no cálculo: {e}", e)
     else:
