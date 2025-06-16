@@ -83,58 +83,18 @@ def show_calculator_variables():
             st.rerun()
 
 
-def get_all_variables_as_dict():
+def get_all_variables_as_dict() -> dict:
+    """
+    Busca no Supabase todas as variáveis de cálculo (nome e valor) e retorna
+    um dicionário {nome_exato: valor}.
+    """
     sb = get_supabase_client()
     try:
-        data = sb.table("variaveis_custos").select(
-            "nome, valor").execute().data
+        data = sb.table("variaveis_calc").select("nome, valor").execute().data
         return {item["nome"]: item["valor"] for item in data}
     except Exception as e:
         display_error(f"Erro ao buscar todas as variáveis: {e}", e)
         return {}
-
-# Código revisado para cálculo de custo por placa 50×50 cm
-
-
-# Parâmetros de entrada
-preco_ps = 10.0           # R$ por kg de matéria-prima
-valor_frete_kg = 5.0      # R$ de frete por kg
-perda = 0.1660            # 16,60% de perda
-peso_placa = 0.13020      # kg por placa (130,20 g)
-
-
-def custo_placa(preco_ps, valor_frete_kg, perda, peso_placa, valor_laminacao):
-    """
-    Calcula o custo de uma placa de 50×50 cm.
-
-    - preco_ps: preço da matéria-prima (R$/kg)
-    - valor_frete_kg: frete (R$/kg)
-    - perda: fração de perda (ex: 0.166 para 16,6%)
-    - peso_placa: peso da placa em kg
-    - valor_laminacao: custo de laminação por kg de material perdido
-      (colocar 0 se não houver laminação)
-    """
-    preco1 = preco_ps + valor_frete_kg
-
-    if valor_laminacao > 0:
-        # Custo do kg final considerando reaproveitamento com laminação
-        preco2 = preco1 + valor_laminacao
-        custo_kg_final = (1 - perda) * preco1 + perda * preco2
-    else:
-        # Custo do kg útil sem laminação (divide pelo rendimento)
-        custo_kg_final = preco1 / (1 - perda)
-
-    return peso_placa * custo_kg_final
-
-
-# Exemplos de uso
-custo_sem_laminacao = custo_placa(
-    preco_ps, valor_frete_kg, perda, peso_placa, 0.0)
-custo_com_laminacao = custo_placa(
-    preco_ps, valor_frete_kg, perda, peso_placa, 5.0)
-
-print(f"Custo por placa sem laminação: R$ {custo_sem_laminacao:.4f}")
-print(f"Custo por placa com laminação:    R$ {custo_com_laminacao:.4f}")
 
 
 def show_price_calculator():
@@ -255,28 +215,51 @@ def show_price_calculator():
         st.info(TEXTOS["calc_info"])
 
 
-def calculate_cost(formula):
+def calculate_cost(formula: str) -> float:
+    """
+    Avalia uma fórmula de custo, permitindo nomes de variáveis case-insensitive,
+    com espaços e iniciando por letras, dígitos ou underscores.
+
+    Retorna None se a fórmula for vazia ou erro de avaliação.
+    """
+    if not formula or not formula.strip():
+        return None
+
     try:
+        # 1) Extrai todos os tokens possíveis (letras, dígitos, _, espaços)
+        raw_names = set(
+            name.strip()
+            for name in re.findall(r"\b[\w ]+\b", formula)
+            if not re.fullmatch(r"\d+(?:\.\d+)?", name.strip())
+        )
+
+        # 2) Carrega todas as variáveis do banco em dict nome_exato->valor
         variables = get_all_variables_as_dict()
 
-        def replace_var(match):
-            var_name = match.group(0)
-            if var_name in variables:
-                return str(variables[var_name])
+        # 3) Monta contexto normalizado (KEY = raw.upper().replace(" ", "_"))
+        context = {}
+        for raw in raw_names:
+            key = raw.replace(" ", "_").upper()
+            if raw in variables:
+                context[key] = variables[raw]
             else:
-                display_error(
-                    f"Variável \'{var_name}\' não encontrada no banco de dados. Usando 0.0.")
-                return "0.0"
+                raise NameError(f"Variável '{raw}' não encontrada")
 
-        processed_formula = re.sub(
-            r'\b[a-zA-Z_][a-zA-Z0-9_]*\b', replace_var, formula)
+        # 4) Sanitiza expressão (spaces→_, uppercase)
+        expr = formula.replace(" ", "_").upper()
 
-        return eval(processed_formula)
+        # 5) Substitui cada variável pelo valor
+        for key, val in context.items():
+            expr = re.sub(rf"\b{re.escape(key)}\b", str(val), expr)
+
+        # 6) Avalia de forma segura
+        return float(eval(expr, {"__builtins__": None}, {}))
+
     except NameError as ne:
-        display_error(f"Erro na fórmula: Variável não definida - {ne}", ne)
+        display_error(str(ne))
         return None
     except Exception as e:
-        display_error(f"Erro ao calcular custo: {e}", e)
+        display_error(f"Erro ao calcular fórmula: {e}", e)
         return None
 
 
