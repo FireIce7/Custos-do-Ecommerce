@@ -121,12 +121,23 @@ def show_price_calculator():
     st.divider()
     if st.button(TEXTOS["calc_botao"], use_container_width=True):
         try:
+            # Peso e Perdas
             peso_50 = float(get_calc_var("peso_50x50"))/1000
             perda_50 = float(get_calc_var("perda_50x50"))/100
+            peso_30 = get_calc_var("peso_30x30") / 1000
+            perda_30 = get_calc_var("perda_30x30") / 100
+            peso_25 = get_calc_var("peso_25x25") / 1000
+            perda_25 = get_calc_var("perda_25x25") / 100
             preco1 = preco_ps*(1+percent_ipi/100)+valor_frete_kg
             preco2 = preco1+valor_limpeza+valor_laminacao
+            # Custos das placas
             custo_placa50 = peso_50*((1-perda_50)*preco1+perda_50*preco2)
+            custo_placa30 = peso_30*((1-perda_30)*preco1+perda_30*preco2)
+            custo_placa25 = peso_25*((1-perda_25)*preco1+perda_25*preco2)
+            # Resultado
             st.metric("Custo Placa 50x50", f"R$ {custo_placa50:.4f}")
+            st.metric("Custo Placa 30x30", f"R$ {custo_placa30:.4f}")
+            st.metric("Custo Placa 25x25", f"R$ {custo_placa25:.4f}")
         except Exception as e:
             display_error(f"Erro no cálculo: {e}", e)
     else:
@@ -186,9 +197,9 @@ def update_calc_variable(name, value):
 def reset_calculator_variables_backend():
     sb = get_supabase_client()
     default_vals = {
-        "peso_50x50": 137.0, "perda_50x50": 10.0,
-        "peso_30x30": 44.0, "perda_30x30": 8.0,
-        "peso_25x25": 40.0, "perda_25x25": 7.0,
+        "peso_50x50": 0, "perda_50x50": 0,
+        "peso_30x30": 0, "perda_30x30": 0,
+        "peso_25x25": 0, "perda_25x25": 0,
     }
     try:
         for nome, valor in default_vals.items():
