@@ -16,17 +16,12 @@ def display_error(message, e=None):
 def display_success(message):
     st.success(message)
 
-# --- Funções de Variáveis de Cálculo (Banco Supabase) ---
-
 
 def get_calc_var(name):
     sb = get_supabase_client()
     try:
-        res = (sb.table("variaveis_calc")
-                 .select("valor")
-                 .eq("nome", name)
-                 .single()
-                 .execute())
+        res = sb.table("variaveis_calc").select(
+            "valor").eq("nome", name).single().execute()
         if isinstance(res.data, dict):
             try:
                 return float(res.data.get("valor", 0.0))
@@ -38,99 +33,12 @@ def get_calc_var(name):
         return 0.0
 
 
-def update_calc_variable(name, value):
-    sb = get_supabase_client()
-    try:
-        sb.table("variaveis_calc").update(
-            {"valor": value}
-        ).eq("nome", name).execute()
-        return True
-    except Exception as e:
-        display_error(f"Erro ao atualizar variável: {e}", e)
-        return False
-
-
-def reset_calculator_variables_backend():
-    sb = get_supabase_client()
-    default_vals = {
-        "peso_50x50": 137.0,
-        "perda_50x50": 10.0,
-        "peso_30x30": 44.0,
-        "perda_30x30": 8.0,
-        "peso_25x25": 40.0,
-        "perda_25x25": 7.0,
-    }
-    try:
-        for nome, valor in default_vals.items():
-            sb.table("variaveis_calc").upsert(
-                {"nome": nome, "valor": valor},
-                on_conflict="nome"
-            ).execute()
-        return True
-    except Exception as e:
-        display_error(f"Erro ao redefinir variáveis: {e}", e)
-        return False
-
-
-# --- Função de Cálculo de Fórmula ---
-
-
-def calculate_cost(formula: str) -> float:
-    """
-    Avalia uma fórmula de custo, permitindo nomes de variáveis case-insensitive
-    e com espaços. Converte tudo para maiúsculas e troca espaços por underscores.
-
-    Retorna None se a fórmula for vazia ou erro de avaliação.
-    Exibe mensagem de erro se uma variável não existir no banco.
-    """
-    if not formula or not formula.strip():
-        return None
-
-    try:
-        # 1) Identificar todos os “raw names” possíveis (letras, underscores e espaços)
-        raw_names = set(re.findall(r"\b[a-zA-Z_][\w ]*\b", formula))
-
-        # 2) Construir contexto sanitizado — chaves UPPER() e spaces->_
-        context = {}
-        for raw in raw_names:
-            key = raw.replace(" ", "_").upper()
-            # buscar valor exato no banco; NameError se não existir
-            val = get_calc_var(raw)
-            if val is None:
-                raise NameError(f"Variável '{raw}' não encontrada")
-            context[key] = val
-
-        # 3) Limpar expressão do usuário: espaços->_ e uppercase
-        expr_clean = formula.replace(" ", "_").upper()
-
-        # 4) Substituir cada identificador pelo valor numérico
-        for key, val in context.items():
-            expr_clean = re.sub(rf"\b{key}\b", str(val), expr_clean)
-
-        # 5) Avaliar de forma segura
-        result = eval(expr_clean, {"__builtins__": None}, {})
-        return float(result)
-
-    except NameError as ne:
-        st.error(str(ne))
-        return None
-    except Exception as e:
-        st.error(f"Erro ao calcular fórmula: {e}")
-        return None
-
-
-# --- UI: Gestão de Variáveis de Cálculo ---
-
-
 def show_calculator_variables():
     st.subheader(TEXTOS["var_titulo"])
     default_vals = {
-        "peso_50x50": get_calc_var("peso_50x50"),
-        "perda_50x50": get_calc_var("perda_50x50"),
-        "peso_30x30": get_calc_var("peso_30x30"),
-        "perda_30x30": get_calc_var("perda_30x30"),
-        "peso_25x25": get_calc_var("peso_25x25"),
-        "perda_25x25": get_calc_var("perda_25x25"),
+        "peso_50x50": 137.0, "perda_50x50": 10.0,
+        "peso_30x30": 44.0, "perda_30x30": 8.0,
+        "peso_25x25": 40.0, "perda_25x25": 7.0,
     }
     sb = get_supabase_client()
     with st.expander(TEXTOS["calc_resetar"]):
@@ -141,51 +49,53 @@ def show_calculator_variables():
             else:
                 display_error(
                     "Erro ao redefinir variáveis para os valores padrão.")
-    for peso_key, perda_key in [("peso_50x50", "perda_50x50"), ("peso_30x30", "perda_30x30"), ("peso_25x25", "perda_25x25")]:
-        peso_val = default_vals[peso_key]
-        perda_val = default_vals[perda_key]
-        with st.form(key=f"form_{peso_key}"):
-            col1, col2 = st.columns(2)
-            with col1:
-                novo_peso = st.number_input(
-                    "Peso (g)", min_value=0.0, value=peso_val, format="%.2f")
-            with col2:
-                nova_perda = st.number_input(
-                    "% de Perda", min_value=0.0, max_value=100.0, value=perda_val, format="%.2f")
-            if st.form_submit_button("Salvar"):
-                for key, val in [(peso_key, novo_peso), (perda_key, nova_perda)]:
-                    if update_calc_variable(key, val):
-                        display_success(f"Variável '{key}' atualizada.")
-                    else:
-                        display_error(f"Erro ao salvar variável '{key}'")
-                st.rerun()
+            st.rerun()
 
-# --- UI: Calculadora de Preço de Placas ---
+    placas = [
+        ("50x50cm", "peso_50x50", "perda_50x50"),
+        ("30x30cm", "peso_30x30", "perda_30x30"),
+        ("25x25cm", "peso_25x25", "perda_25x25"),
+    ]
+    labels = [TEXTOS["var_placas"][p[0][:2]] for p in placas]
+    st.markdown(
+        f"<h4 style=\'{TEXTOS['var_selecione_style']}\'>{TEXTOS['var_selecione_texto']}</h4>", unsafe_allow_html=True)
+    choice = st.radio("Selecionar Placa para Editar Variáveis",
+                      labels, horizontal=True, label_visibility="collapsed")
+    idx = labels.index(choice)
+    label, peso_key, perda_key = placas[idx]
+    peso_val = float(get_calc_var(peso_key))
+    perda_val = float(get_calc_var(perda_key))
+
+    with st.form(key=f"form_{label}"):
+        col1, col2 = st.columns(2)
+        with col1:
+            novo_peso = st.number_input(
+                "Peso (g)", min_value=0.0, value=peso_val, format="%.2f")
+        with col2:
+            nova_perda = st.number_input(
+                "% de Perda", min_value=0.0, max_value=100.0, value=perda_val, format="%.2f")
+        if st.form_submit_button("Salvar"):
+            for key, val in [(peso_key, novo_peso), (perda_key, nova_perda)]:
+                if update_calc_variable(key, val):
+                    display_success(f"Variável \'{key}\' atualizada.")
+                else:
+                    display_error(f"Erro ao salvar variável \'{key}\'")
+            st.rerun()
 
 
 def show_price_calculator():
     st.markdown(
-        "<style>.big-radio .st-emotion-cache-1wmy9hl{font-size:26px!important;font-weight:600!important;}</style>",
-        unsafe_allow_html=True
-    )
+        "<style>.big-radio .st-emotion-cache-1wmy9hl{font-size:26px!important;font-weight:600!important;}</style>", unsafe_allow_html=True)
     st.markdown(
-        f"<h4 style='{TEXTOS['calc_menu_titulo_style']}'>{TEXTOS['calc_menu_titulo_texto']}</h4>",
-        unsafe_allow_html=True
-    )
-    submenu = st.radio(
-        "Menu da Calculadora",
-        TEXTOS["calc_menu_opcoes"],
-        horizontal=True,
-        key="menu_radio",
-        label_visibility="collapsed"
-    )
+        f"<h4 style=\'{TEXTOS['calc_menu_titulo_style']}\'>{TEXTOS['calc_menu_titulo_texto']}</h4>", unsafe_allow_html=True)
+    submenu = st.radio("Menu da Calculadora", TEXTOS["calc_menu_opcoes"],
+                       horizontal=True, key="menu_radio", label_visibility="collapsed")
     if submenu == "Variáveis":
         show_calculator_variables()
         return
+
     st.markdown(
-        f"<h3 style='{TEXTOS['calc_titulo_style']}'>{TEXTOS['calc_titulo_texto']}</h3>",
-        unsafe_allow_html=True
-    )
+        f"<h3 style=\'{TEXTOS['calc_titulo_style']}\'>{TEXTOS['calc_titulo_texto']}</h3>", unsafe_allow_html=True)
     with st.container():
         col1, col2 = st.columns(2)
         with col1:
@@ -211,29 +121,82 @@ def show_price_calculator():
     st.divider()
     if st.button(TEXTOS["calc_botao"], use_container_width=True):
         try:
-            # busca variáveis e converte unidades
-            peso_50 = get_calc_var("peso_50x50") / 1000
-            perda_50 = get_calc_var("perda_50x50") / 100
-            peso_30 = get_calc_var("peso_30x30") / 1000
-            perda_30 = get_calc_var("perda_30x30") / 100
-            peso_25 = get_calc_var("peso_25x25") / 1000
-            perda_25 = get_calc_var("perda_25x25") / 100
-            # cálculo do preço base
-            preco1 = preco_ps * (1 + percent_ipi / 100) + valor_frete_kg
-            preco2 = preco1 + valor_limpeza + valor_laminacao
-            # custos das placas
-            custo_placa50 = peso_50 * \
-                ((1 - perda_50) * preco1 + perda_50 * preco2)
-            custo_placa30 = peso_30 * \
-                ((1 - perda_30) * preco1 + perda_30 * preco2)
-            custo_placa25 = peso_25 * \
-                ((1 - perda_25) * preco1 + perda_25 * preco2)
-            # exibe
+            peso_50 = float(get_calc_var("peso_50x50"))/1000
+            perda_50 = float(get_calc_var("perda_50x50"))/100
+            preco1 = preco_ps*(1+percent_ipi/100)+valor_frete_kg
+            preco2 = preco1+valor_limpeza+valor_laminacao
+            custo_placa50 = peso_50*((1-perda_50)*preco1+perda_50*preco2)
             st.metric("Custo Placa 50x50", f"R$ {custo_placa50:.4f}")
-            st.metric("Custo Placa 30x30", f"R$ {custo_placa30:.4f}")
-            st.metric("Custo Placa 25x25", f"R$ {custo_placa25:.4f}")
         except Exception as e:
             display_error(f"Erro no cálculo: {e}", e)
     else:
         st.subheader(TEXTOS["calc_resultado"])
         st.info(TEXTOS["calc_info"])
+
+
+def get_all_variables_as_dict():
+    sb = get_supabase_client()
+    try:
+        data = sb.table("variaveis_custos").select(
+            "nome, valor").execute().data
+        return {item["nome"]: item["valor"] for item in data}
+    except Exception as e:
+        display_error(f"Erro ao buscar todas as variáveis: {e}", e)
+        return {}
+
+
+def calculate_cost(formula):
+    try:
+        variables = get_all_variables_as_dict()
+
+        def replace_var(match):
+            var_name = match.group(0)
+            if var_name in variables:
+                return str(variables[var_name])
+            else:
+                display_error(
+                    f"Variável \'{var_name}\' não encontrada no banco de dados. Usando 0.0.")
+                return "0.0"
+
+        processed_formula = re.sub(
+            r'\b[a-zA-Z_][a-zA-Z0-9_]*\b', replace_var, formula)
+
+        return eval(processed_formula)
+    except NameError as ne:
+        display_error(f"Erro na fórmula: Variável não definida - {ne}", ne)
+        return None
+    except Exception as e:
+        display_error(f"Erro ao calcular custo: {e}", e)
+        return None
+
+
+def update_calc_variable(name, value):
+    sb = get_supabase_client()
+    try:
+        sb.table("variaveis_calc").upsert(
+            {"nome": name, "valor": value},
+            on_conflict="nome",
+        ).execute()
+        return True
+    except Exception as e:
+        display_error(f"Erro ao salvar variável \'{name}\'", e)
+        return False
+
+
+def reset_calculator_variables_backend():
+    sb = get_supabase_client()
+    default_vals = {
+        "peso_50x50": 137.0, "perda_50x50": 10.0,
+        "peso_30x30": 44.0, "perda_30x30": 8.0,
+        "peso_25x25": 40.0, "perda_25x25": 7.0,
+    }
+    try:
+        for nome, valor in default_vals.items():
+            sb.table("variaveis_calc").upsert(
+                {"nome": nome, "valor": valor},
+                on_conflict="nome",
+            ).execute()
+        return True
+    except Exception as e:
+        display_error(f"Erro ao redefinir variáveis: {e}", e)
+        return False
