@@ -85,13 +85,13 @@ def show_calculator_variables():
 
 def get_all_variables_as_dict() -> dict:
     """
-    Busca no Supabase todas as variáveis de cálculo (nome e valor) e retorna
-    um dicionário {nome_exato: valor}.
+    Busca no Supabase todas as variáveis de cálculo (nome e valor)
+    e retorna um dicionário {nome_exato: valor}.
     """
     sb = get_supabase_client()
     try:
         data = sb.table("variaveis_calc").select("nome, valor").execute().data
-        return {item["nome"]: item["valor"] for item in data}
+        return {item["nome"]: float(item["valor"]) for item in data}
     except Exception as e:
         display_error(f"Erro ao buscar todas as variáveis: {e}", e)
         return {}
@@ -226,33 +226,40 @@ def calculate_cost(formula: str) -> float:
         return None
 
     try:
-        # 1) Extrai todos os tokens possíveis (letras, dígitos, _, espaços)
+        # 1) Extrai todos os tokens possíveis (letras, dígitos, _, espaços),
+        #    ignorando tokens numéricos puros.
         raw_names = set(
             name.strip()
             for name in re.findall(r"\b[\w ]+\b", formula)
             if not re.fullmatch(r"\d+(?:\.\d+)?", name.strip())
         )
 
-        # 2) Carrega todas as variáveis do banco em dict nome_exato->valor
+        # 2) Carrega todas as variáveis do banco em {nome_exato: valor}
         variables = get_all_variables_as_dict()
 
-        # 3) Monta contexto normalizado (KEY = raw.upper().replace(" ", "_"))
+        # 3) Normaliza as chaves vindas do DB: spaces→_, uppercase
+        normalized_vars = {
+            key.replace(" ", "_").upper(): val
+            for key, val in variables.items()
+        }
+
+        # 4) Monta contexto, checando cada token normalizado
         context = {}
         for raw in raw_names:
-            key = raw.replace(" ", "_").upper()
-            if raw in variables:
-                context[key] = variables[raw]
+            norm_key = raw.replace(" ", "_").upper()
+            if norm_key in normalized_vars:
+                context[norm_key] = normalized_vars[norm_key]
             else:
                 raise NameError(f"Variável '{raw}' não encontrada")
 
-        # 4) Sanitiza expressão (spaces→_, uppercase)
+        # 5) Sanitiza expressão inteira: spaces→_, uppercase
         expr = formula.replace(" ", "_").upper()
 
-        # 5) Substitui cada variável pelo valor
+        # 6) Substitui cada chave no texto pelo seu valor
         for key, val in context.items():
             expr = re.sub(rf"\b{re.escape(key)}\b", str(val), expr)
 
-        # 6) Avalia de forma segura
+        # 7) Avalia de forma segura
         return float(eval(expr, {"__builtins__": None}, {}))
 
     except NameError as ne:
