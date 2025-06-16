@@ -216,50 +216,41 @@ def show_price_calculator():
 
 
 def calculate_cost(formula: str) -> float:
-    """
-    Avalia uma fórmula de custo, permitindo nomes de variáveis case-insensitive,
-    com espaços e iniciando por letras, dígitos ou underscores.
-
-    Retorna None se a fórmula for vazia ou erro de avaliação.
-    """
     if not formula or not formula.strip():
         return None
 
     try:
-        # 1) Extrai todos os tokens possíveis (letras, dígitos, _, espaços),
-        #    ignorando tokens numéricos puros.
-        raw_names = set(
+        # 1) Extrai tokens (letras, dígitos, _, espaços), ignora números puros
+        raw_names = {
             name.strip()
             for name in re.findall(r"\b[\w ]+\b", formula)
             if not re.fullmatch(r"\d+(?:\.\d+)?", name.strip())
-        )
-
-        # 2) Carrega todas as variáveis do banco em {nome_exato: valor}
-        variables = get_all_variables_as_dict()
-
-        # 3) Normaliza as chaves vindas do DB: spaces→_, uppercase
-        normalized_vars = {
-            key.replace(" ", "_").upper(): val
-            for key, val in variables.items()
         }
 
-        # 4) Monta contexto, checando cada token normalizado
+        # 2) Carrega {nome_exato: valor} e normaliza para lookup
+        variables = get_all_variables_as_dict()
+        normalized = {
+            k.replace(" ", "_").upper(): v
+            for k, v in variables.items()
+        }
+
+        # 3) Monta o contexto, validando existência
         context = {}
         for raw in raw_names:
-            norm_key = raw.replace(" ", "_").upper()
-            if norm_key in normalized_vars:
-                context[norm_key] = normalized_vars[norm_key]
+            key = raw.replace(" ", "_").upper()
+            if key in normalized:
+                context[key] = normalized[key]
             else:
                 raise NameError(f"Variável '{raw}' não encontrada")
 
-        # 5) Sanitiza expressão inteira: spaces→_, uppercase
+        # 4) Sanitiza fórmula (spaces→_, uppercase)
         expr = formula.replace(" ", "_").upper()
 
-        # 6) Substitui cada chave no texto pelo seu valor
-        for key, val in context.items():
-            expr = re.sub(rf"\b{re.escape(key)}\b", str(val), expr)
+        # 5) Substituição segura (literal replace)
+        for key in sorted(context.keys(), key=len, reverse=True):
+            expr = expr.replace(key, str(context[key]))
 
-        # 7) Avalia de forma segura
+        # 6) Avalia de forma segura
         return float(eval(expr, {"__builtins__": None}, {}))
 
     except NameError as ne:
