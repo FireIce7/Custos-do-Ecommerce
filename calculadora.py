@@ -83,131 +83,61 @@ def show_calculator_variables():
             st.rerun()
 
 
-def get_all_variables_as_dict() -> dict:
-    """
-    Busca no Supabase todas as variáveis de cálculo (nome e valor)
-    e retorna um dicionário {nome_exato: valor}.
-    """
-    sb = get_supabase_client()
-    try:
-        data = sb.table("variaveis_calc").select("nome, valor").execute().data
-        return {item["nome"]: float(item["valor"]) for item in data}
-    except Exception as e:
-        display_error(f"Erro ao buscar todas as variáveis: {e}", e)
-        return {}
-
-
 def show_price_calculator():
     st.markdown(
-        "<style>.big-radio .st-emotion-cache-1wmy9hl{font-size:26px!important;font-weight:600!important;}</style>",
-        unsafe_allow_html=True)
+        "<style>.big-radio .st-emotion-cache-1wmy9hl{font-size:26px!important;font-weight:600!important;}</style>", unsafe_allow_html=True)
     st.markdown(
-        f"<h4 style='{TEXTOS['calc_menu_titulo_style']}'>{TEXTOS['calc_menu_titulo_texto']}</h4>",
-        unsafe_allow_html=True)
-    submenu = st.radio("Menu da Calculadora",
-                       TEXTOS["calc_menu_opcoes"],
-                       horizontal=True,
-                       key="menu_radio",
-                       label_visibility="collapsed")
+        f"<h4 style=\'{TEXTOS['calc_menu_titulo_style']}\'>{TEXTOS['calc_menu_titulo_texto']}</h4>", unsafe_allow_html=True)
+    submenu = st.radio("Menu da Calculadora", TEXTOS["calc_menu_opcoes"],
+                       horizontal=True, key="menu_radio", label_visibility="collapsed")
     if submenu == "Variáveis":
         show_calculator_variables()
         return
 
     st.markdown(
-        f"<h3 style='{TEXTOS['calc_titulo_style']}'>{TEXTOS['calc_titulo_texto']}</h3>",
-        unsafe_allow_html=True)
-
-    # --- Inputs ---
+        f"<h3 style=\'{TEXTOS['calc_titulo_style']}\'>{TEXTOS['calc_titulo_texto']}</h3>", unsafe_allow_html=True)
     with st.container():
         col1, col2 = st.columns(2)
         with col1:
             preco_ps = st.number_input(
-                "Preço do PS (por KG)",
-                min_value=0.0,
-                format="%.2f",
-                key="preco_ps")
+                "Preço do PS (por KG)", min_value=0.0, format="%.2f", key="preco_ps")
             quantidade_kg = st.number_input(
-                "Quantidade (KG)",
-                min_value=0.1,
-                format="%.2f",
-                key="quantidade_kg",
-                value=1.0)
+                "Quantidade (KG)", min_value=0.1, format="%.2f", key="quantidade_kg", value=1.0)
             valor_frete_kg = st.number_input(
-                "Valor do Frete (por KG)",
-                min_value=0.0,
-                format="%.2f",
-                key="valor_frete_kg")
+                "Valor do Frete (por KG)", min_value=0.0, format="%.2f", key="valor_frete_kg")
         with col2:
             tem_limpeza = st.radio(
-                "Limpeza/Granulação?",
-                ["Não", "Sim"],
-                key="tem_limpeza",
-                horizontal=True)
-            valor_limpeza = st.number_input(
-                "Valor Limpeza/Gran. (por KG)",
-                min_value=0.0,
-                format="%.2f",
-                key="valor_limpeza") if tem_limpeza == "Sim" else 0.0
-
+                "Limpeza/Granulação?", ["Não", "Sim"], key="tem_limpeza", horizontal=True)
+            valor_limpeza = st.number_input("Valor Limpeza/Gran. (por KG)", min_value=0.0,
+                                            format="%.2f", key="valor_limpeza") if tem_limpeza == "Sim" else 0.0
             tem_laminacao = st.radio(
-                "Laminação?",
-                ["Não", "Sim"],
-                key="tem_laminacao",
-                horizontal=True)
-            valor_laminacao = st.number_input(
-                "Valor Laminação (por KG)",
-                min_value=0.0,
-                format="%.2f",
-                key="valor_laminacao") if tem_laminacao == "Sim" else 0.0
-
+                "Laminação?", ["Não", "Sim"], key="tem_laminacao", horizontal=True)
+            valor_laminacao = st.number_input("Valor Laminação (por KG)", min_value=0.0,
+                                              format="%.2f", key="valor_laminacao") if tem_laminacao == "Sim" else 0.0
             tem_ipi = st.radio(
-                "IPI?",
-                ["Não", "Sim"],
-                key="tem_ipi",
-                horizontal=True)
+                "IPI?", ["Não", "Sim"], key="tem_ipi", horizontal=True)
             percent_ipi = st.number_input(
-                "% IPI",
-                min_value=0.0,
-                max_value=100.0,
-                format="%.1f",
-                key="percent_ipi") if tem_ipi == "Sim" else 0.0
-
+                "% IPI", min_value=0.0, max_value=100.0, format="%.1f", key="percent_ipi") if tem_ipi == "Sim" else 0.0
     st.divider()
-
     if st.button(TEXTOS["calc_botao"], use_container_width=True):
         try:
-            # Carrega pesos (kg) e perdas (fração)
-            peso_50 = float(get_calc_var("peso_50x50")) / 1000
-            perda_50 = float(get_calc_var("perda_50x50")) / 100
-            peso_30 = float(get_calc_var("peso_30x30")) / 1000
-            perda_30 = float(get_calc_var("perda_30x30")) / 100
-            peso_25 = float(get_calc_var("peso_25x25")) / 1000
-            perda_25 = float(get_calc_var("perda_25x25")) / 100
-
-            # Preço base/kg e preço do scrap tratado/kg
-            preco1 = preco_ps * (1 + percent_ipi/100) + valor_frete_kg
-            preco2 = preco1 + valor_limpeza + valor_laminacao
-
-            # Função auxiliar para custo da placa
-            def custo_placa(peso, perda):
-                if valor_limpeza > 0 or valor_laminacao > 0:
-                    # Reaproveita sucata (limpeza ou laminação)
-                    custo_kg_final = (1 - perda) * preco1 + perda * preco2
-                else:
-                    # Sucata perdida – ajusta pelo rendimento
-                    custo_kg_final = preco1 / (1 - perda)
-                return peso * custo_kg_final
-
-            # Calcula custos
-            custo_placa50 = custo_placa(peso_50, perda_50)
-            custo_placa30 = custo_placa(peso_30, perda_30)
-            custo_placa25 = custo_placa(peso_25, perda_25)
-
-            # Exibe resultado
+            # Peso e Perdas
+            peso_50 = float(get_calc_var("peso_50x50"))/1000
+            perda_50 = float(get_calc_var("perda_50x50"))/100
+            peso_30 = get_calc_var("peso_30x30") / 1000
+            perda_30 = get_calc_var("perda_30x30") / 100
+            peso_25 = get_calc_var("peso_25x25") / 1000
+            perda_25 = get_calc_var("perda_25x25") / 100
+            preco1 = preco_ps*(1+percent_ipi/100)+valor_frete_kg
+            preco2 = preco1+valor_limpeza+valor_laminacao
+            # Custos das placas
+            custo_placa50 = peso_50*((1-perda_50)*preco1+perda_50*preco2)
+            custo_placa30 = peso_30*((1-perda_30)*preco1+perda_30*preco2)
+            custo_placa25 = peso_25*((1-perda_25)*preco1+perda_25*preco2)
+            # Resultado
             st.metric("Custo Placa 50x50", f"R$ {custo_placa50:.4f}")
             st.metric("Custo Placa 30x30", f"R$ {custo_placa30:.4f}")
             st.metric("Custo Placa 25x25", f"R$ {custo_placa25:.4f}")
-
         except Exception as e:
             display_error(f"Erro no cálculo: {e}", e)
     else:
@@ -215,47 +145,59 @@ def show_price_calculator():
         st.info(TEXTOS["calc_info"])
 
 
-def calculate_cost(formula: str) -> float:
+def get_all_variables_as_dict():
+    sb = get_supabase_client()
+    try:
+        data = sb.table("variaveis_custos").select(
+            "nome, valor").execute().data
+        return {item["nome"]: item["valor"] for item in data}
+    except Exception as e:
+        display_error(f"Erro ao buscar todas as variáveis: {e}", e)
+        return {}
+
+
+def calculate_cost(formula):
+    """
+    Avalia uma fórmula de custo case-insensitive, permitindo nomes
+    com espaços ou underscores, e variáveis iniciando por letras,
+    dígitos ou underscores.
+    """
     if not formula or not formula.strip():
         return None
 
     try:
-        # 1) Extrai tokens (letras, dígitos, _, espaços), ignora números puros
-        raw_names = {
-            name.strip()
-            for name in re.findall(r"\b[\w ]+\b", formula)
-            if not re.fullmatch(r"\d+(?:\.\d+)?", name.strip())
-        }
+        # 1) Busca todas as variáveis no banco:
+        variables = get_all_variables_as_dict()  # {nome_exato: valor}
 
-        # 2) Carrega {nome_exato: valor} e normaliza para lookup
-        variables = get_all_variables_as_dict()
-        normalized = {
-            k.replace(" ", "_").upper(): v
-            for k, v in variables.items()
-        }
+        # 2) Monta um único regex que captura qualquer variável (spaces/_)
+        patterns = []
+        for name in variables.keys():
+            # transforma “PS BRANCO” em regex que aceita espaço ou underscore
+            pat = re.escape(name).replace(r"\ ", r"[ _]")
+            patterns.append(pat)
+        combined = r"\b(?:" + "|".join(patterns) + r")\b"
+        regex = re.compile(combined, flags=re.IGNORECASE)
 
-        # 3) Monta o contexto, validando existência
-        context = {}
-        for raw in raw_names:
-            key = raw.replace(" ", "_").upper()
-            if key in normalized:
-                context[key] = normalized[key]
-            else:
-                raise NameError(f"Variável '{raw}' não encontrada")
+        # 3) Substitui cada ocorrência pelo valor correto
+        def repl(m):
+            raw = m.group(0)
+            # normaliza: underscore vira espaço e tudo para lowercase
+            key_lc = raw.replace("_", " ").strip().lower()
+            # encontra a chave exata no dict
+            actual = next((k for k in variables if k.lower() == key_lc), None)
+            if actual is None:
+                display_error(f"Variável '{raw}' não encontrada")
+                return "0"
+            return str(variables[actual])
 
-        # 4) Sanitiza fórmula (spaces→_, uppercase)
-        expr = formula.replace(" ", "_").upper()
+        processed = regex.sub(repl, formula)
 
-        # 5) Substituição segura (literal replace)
-        for key in sorted(context.keys(), key=len, reverse=True):
-            expr = expr.replace(key, str(context[key]))
+        # 4) Elimina espaços extras e padroniza vírgula para ponto
+        expr = processed.replace(" ", "").replace(",", ".")
 
-        # 6) Avalia de forma segura
+        # 5) Avalia com eval seguro
         return float(eval(expr, {"__builtins__": None}, {}))
 
-    except NameError as ne:
-        display_error(str(ne))
-        return None
     except Exception as e:
         display_error(f"Erro ao calcular fórmula: {e}", e)
         return None
