@@ -39,17 +39,24 @@ def add_category_product(name):
         return None
 
 
-def get_categories_product(search_term="", page=1):
+def get_categories_product(search_term: str = "", page: int = 1):
     sb = get_supabase_client()
-    offset = (page-1)*ITEMS_PER_PAGE
+    offset = (page - 1) * ITEMS_PER_PAGE
     try:
-        q = sb.table("categorias_produtos").select("*")
+        # seleciona só os campos que precisamos
+        q = sb.table("categorias_produtos").select("id", "nome")
         if search_term:
             q = q.ilike("nome", f"%{search_term}%")
-        data = q.execute().data or []
-        total = len(data)
-        pages = math.ceil(total/ITEMS_PER_PAGE) if total else 1
-        return data[offset:offset+ITEMS_PER_PAGE], pages, total
+        raw = q.execute().data or []
+        total = len(raw)
+        pages = math.ceil(total / ITEMS_PER_PAGE) if total else 1
+
+        # faz o slicing da página
+        page_items = raw[offset: offset + ITEMS_PER_PAGE]
+        # converte para lista de tuplas (id, nome)
+        data = [(item["id"], item["nome"]) for item in page_items]
+
+        return data, pages, total
     except Exception as e:
         display_error(f"Erro ao buscar categorias de produto: {e}", e)
         return [], 1, 0
@@ -103,17 +110,24 @@ def add_category_variable(name):
         return None
 
 
-def get_categories_variable(search_term="", page=1):
+def get_categories_variable(search_term: str = "", page: int = 1):
     sb = get_supabase_client()
-    offset = (page-1)*ITEMS_PER_PAGE
+    offset = (page - 1) * ITEMS_PER_PAGE
     try:
-        q = sb.table("categorias_variaveis").select("*")
+        # seleciona só os campos que precisamos
+        q = sb.table("categorias_variaveis").select("id", "nome")
         if search_term:
             q = q.ilike("nome", f"%{search_term}%")
-        data = q.execute().data or []
-        total = len(data)
-        pages = math.ceil(total/ITEMS_PER_PAGE) if total else 1
-        return data[offset:offset+ITEMS_PER_PAGE], pages, total
+        raw = q.execute().data or []
+        total = len(raw)
+        pages = math.ceil(total / ITEMS_PER_PAGE) if total else 1
+
+        # faz o slicing da página
+        page_items = raw[offset: offset + ITEMS_PER_PAGE]
+        # converte para lista de tuplas (id, nome)
+        data = [(item["id"], item["nome"]) for item in page_items]
+
+        return data, pages, total
     except Exception as e:
         display_error(f"Erro ao buscar categorias de variável: {e}", e)
         return [], 1, 0
@@ -310,7 +324,7 @@ def show_products():
         search = st.text_input("Buscar Produto", key="prod_search")
     with col2:
         cats, _, _ = get_categories_product()
-        opts = {c["nome"]: c["id"] for c in cats}
+        opts = {c[1]: c[0] for c in cats}
         disp = {"Todos": "all", "Sem Categoria": "none", **opts}
         selected = st.selectbox("Filtrar por Categoria", list(
             disp.keys()), key="prod_cat_filter")
@@ -340,7 +354,7 @@ def show_products():
             new_name = form.text_input("Nome do Produto", value=name)
             new_formula = form.text_area("Fórmula", value=formula)
             product_categories, _, _ = get_categories_product()
-            product_opts = {c["nome"]: c["id"] for c in product_categories}
+            product_opts = {c[1]: c[0] for c in product_categories}
             new_cat = form.selectbox("Categoria", ["(Nenhuma)"] + list(
                 product_opts.keys()), index=0 if not cat_sel else (list(product_opts.values()).index(cat_sel) + 1 if cat_sel in product_opts.values() else 0))
             if form.form_submit_button("Salvar"):
@@ -415,7 +429,7 @@ def show_variables():
         search = st.text_input("Buscar Variável", key="var_search")
     with col2:
         cats, _, _ = get_categories_variable()
-        opts = {c["nome"]: c["id"] for c in cats}
+        opts = {c[1]: c[0] for c in cats}
         disp = {"Todos": "all", "Sem Categoria": "none", **opts}
         selected = st.selectbox("Filtrar por Categoria", list(
             disp.keys()), key="var_cat_filter")
@@ -447,7 +461,7 @@ def show_variables():
             new_name = form.text_input("Nome da Variável", value=name)
             new_value = form.number_input("Valor", value=value, format="%.2f")
             variable_categories, _, _ = get_categories_variable()
-            variable_opts = {c["nome"]: c["id"] for c in variable_categories}
+            variable_opts = {c[1]: c[0] for c in variable_categories}
             new_cat = form.selectbox("Categoria", ["(Nenhuma)"] + list(
                 variable_opts.keys()), index=0 if not cat_sel else (list(variable_opts.values()).index(cat_sel) + 1 if cat_sel in variable_opts.values() else 0))
 
