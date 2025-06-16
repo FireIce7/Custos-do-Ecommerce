@@ -71,36 +71,53 @@ def reset_calculator_variables_backend():
         display_error(f"Erro ao redefinir variáveis: {e}", e)
         return False
 
+
 # --- Função de Cálculo de Fórmula ---
 
 
-def calculate_cost(formula: str):
+def calculate_cost(formula: str) -> float:
     """
-    Avalia a fórmula do produto substituindo variáveis de cálculo
-    pelos seus valores atuais e retornando o resultado numérico.
+    Avalia uma fórmula de custo, permitindo nomes de variáveis case-insensitive
+    e com espaços. Converte tudo para maiúsculas e troca espaços por underscores.
+
+    Retorna None se a fórmula for vazia ou erro de avaliação.
+    Exibe mensagem de erro se uma variável não existir no banco.
     """
     if not formula or not formula.strip():
         return None
+
     try:
-        expr = formula
-        # encontra todos os identificadores de variáveis
-        vars_found = set(re.findall(r"\b[a-zA-Z_]\w*\b", formula))
-        # substitui cada variável pelo seu valor
-        for var in vars_found:
-            # ignora termos não relacionados a variáveis
-            if var in ('and', 'or', 'not'):
-                continue
-            try:
-                val = get_calc_var(var)
-                expr = re.sub(rf"\b{var}\b", str(val), expr)
-            except Exception:
-                continue
-        # avalia a expressão em um ambiente restrito
-        result = eval(expr, {"__builtins__": {}}, {})
+        # 1) Identificar todos os “raw names” possíveis (letras, underscores e espaços)
+        raw_names = set(re.findall(r"\b[a-zA-Z_][\w ]*\b", formula))
+
+        # 2) Construir contexto sanitizado — chaves UPPER() e spaces->_
+        context = {}
+        for raw in raw_names:
+            key = raw.replace(" ", "_").upper()
+            # buscar valor exato no banco; NameError se não existir
+            val = get_calc_var(raw)
+            if val is None:
+                raise NameError(f"Variável '{raw}' não encontrada")
+            context[key] = val
+
+        # 3) Limpar expressão do usuário: espaços->_ e uppercase
+        expr_clean = formula.replace(" ", "_").upper()
+
+        # 4) Substituir cada identificador pelo valor numérico
+        for key, val in context.items():
+            expr_clean = re.sub(rf"\b{key}\b", str(val), expr_clean)
+
+        # 5) Avaliar de forma segura
+        result = eval(expr_clean, {"__builtins__": None}, {})
         return float(result)
-    except Exception as e:
-        display_error(f"Erro ao calcular fórmula: {e}", e)
+
+    except NameError as ne:
+        st.error(str(ne))
         return None
+    except Exception as e:
+        st.error(f"Erro ao calcular fórmula: {e}")
+        return None
+
 
 # --- UI: Gestão de Variáveis de Cálculo ---
 
