@@ -83,68 +83,6 @@ def show_calculator_variables():
             st.rerun()
 
 
-def show_price_calculator():
-    st.markdown(
-        "<style>.big-radio .st-emotion-cache-1wmy9hl{font-size:26px!important;font-weight:600!important;}</style>", unsafe_allow_html=True)
-    st.markdown(
-        f"<h4 style=\'{TEXTOS['calc_menu_titulo_style']}\'>{TEXTOS['calc_menu_titulo_texto']}</h4>", unsafe_allow_html=True)
-    submenu = st.radio("Menu da Calculadora", TEXTOS["calc_menu_opcoes"],
-                       horizontal=True, key="menu_radio", label_visibility="collapsed")
-    if submenu == "Variáveis":
-        show_calculator_variables()
-        return
-
-    st.markdown(
-        f"<h3 style=\'{TEXTOS['calc_titulo_style']}\'>{TEXTOS['calc_titulo_texto']}</h3>", unsafe_allow_html=True)
-    with st.container():
-        col1, col2 = st.columns(2)
-        with col1:
-            preco_ps = st.number_input(
-                "Preço do PS (por KG)", min_value=0.0, format="%.2f", key="preco_ps")
-            quantidade_kg = st.number_input(
-                "Quantidade (KG)", min_value=0.1, format="%.2f", key="quantidade_kg", value=1.0)
-            valor_frete_kg = st.number_input(
-                "Valor do Frete (por KG)", min_value=0.0, format="%.2f", key="valor_frete_kg")
-        with col2:
-            tem_limpeza = st.radio(
-                "Limpeza/Granulação?", ["Não", "Sim"], key="tem_limpeza", horizontal=True)
-            valor_limpeza = st.number_input("Valor Limpeza/Gran. (por KG)", min_value=0.0,
-                                            format="%.2f", key="valor_limpeza") if tem_limpeza == "Sim" else 0.0
-            tem_laminacao = st.radio(
-                "Laminação?", ["Não", "Sim"], key="tem_laminacao", horizontal=True)
-            valor_laminacao = st.number_input("Valor Laminação (por KG)", min_value=0.0,
-                                              format="%.2f", key="valor_laminacao") if tem_laminacao == "Sim" else 0.0
-            tem_ipi = st.radio(
-                "IPI?", ["Não", "Sim"], key="tem_ipi", horizontal=True)
-            percent_ipi = st.number_input(
-                "% IPI", min_value=0.0, max_value=100.0, format="%.1f", key="percent_ipi") if tem_ipi == "Sim" else 0.0
-    st.divider()
-    if st.button(TEXTOS["calc_botao"], use_container_width=True):
-        try:
-            # Peso e Perdas
-            peso_50 = float(get_calc_var("peso_50x50"))/1000
-            perda_50 = float(get_calc_var("perda_50x50"))/100
-            peso_30 = get_calc_var("peso_30x30") / 1000
-            perda_30 = get_calc_var("perda_30x30") / 100
-            peso_25 = get_calc_var("peso_25x25") / 1000
-            perda_25 = get_calc_var("perda_25x25") / 100
-            preco1 = preco_ps*(1+percent_ipi/100)+valor_frete_kg
-            preco2 = preco1+valor_limpeza+valor_laminacao
-            # Custos das placas
-            custo_placa50 = peso_50*((1-perda_50)*preco1+perda_50*preco2)
-            custo_placa30 = peso_30*((1-perda_30)*preco1+perda_30*preco2)
-            custo_placa25 = peso_25*((1-perda_25)*preco1+perda_25*preco2)
-            # Resultado
-            st.metric("Custo Placa 50x50", f"R$ {custo_placa50:.4f}")
-            st.metric("Custo Placa 30x30", f"R$ {custo_placa30:.4f}")
-            st.metric("Custo Placa 25x25", f"R$ {custo_placa25:.4f}")
-        except Exception as e:
-            display_error(f"Erro no cálculo: {e}", e)
-    else:
-        st.subheader(TEXTOS["calc_resultado"])
-        st.info(TEXTOS["calc_info"])
-
-
 def get_all_variables_as_dict():
     sb = get_supabase_client()
     try:
@@ -154,6 +92,167 @@ def get_all_variables_as_dict():
     except Exception as e:
         display_error(f"Erro ao buscar todas as variáveis: {e}", e)
         return {}
+
+# Código revisado para cálculo de custo por placa 50×50 cm
+
+
+# Parâmetros de entrada
+preco_ps = 10.0           # R$ por kg de matéria-prima
+valor_frete_kg = 5.0      # R$ de frete por kg
+perda = 0.1660            # 16,60% de perda
+peso_placa = 0.13020      # kg por placa (130,20 g)
+
+
+def custo_placa(preco_ps, valor_frete_kg, perda, peso_placa, valor_laminacao):
+    """
+    Calcula o custo de uma placa de 50×50 cm.
+
+    - preco_ps: preço da matéria-prima (R$/kg)
+    - valor_frete_kg: frete (R$/kg)
+    - perda: fração de perda (ex: 0.166 para 16,6%)
+    - peso_placa: peso da placa em kg
+    - valor_laminacao: custo de laminação por kg de material perdido
+      (colocar 0 se não houver laminação)
+    """
+    preco1 = preco_ps + valor_frete_kg
+
+    if valor_laminacao > 0:
+        # Custo do kg final considerando reaproveitamento com laminação
+        preco2 = preco1 + valor_laminacao
+        custo_kg_final = (1 - perda) * preco1 + perda * preco2
+    else:
+        # Custo do kg útil sem laminação (divide pelo rendimento)
+        custo_kg_final = preco1 / (1 - perda)
+
+    return peso_placa * custo_kg_final
+
+
+# Exemplos de uso
+custo_sem_laminacao = custo_placa(
+    preco_ps, valor_frete_kg, perda, peso_placa, 0.0)
+custo_com_laminacao = custo_placa(
+    preco_ps, valor_frete_kg, perda, peso_placa, 5.0)
+
+print(f"Custo por placa sem laminação: R$ {custo_sem_laminacao:.4f}")
+print(f"Custo por placa com laminação:    R$ {custo_com_laminacao:.4f}")
+
+
+def show_price_calculator():
+    st.markdown(
+        "<style>.big-radio .st-emotion-cache-1wmy9hl{font-size:26px!important;font-weight:600!important;}</style>",
+        unsafe_allow_html=True)
+    st.markdown(
+        f"<h4 style='{TEXTOS['calc_menu_titulo_style']}'>{TEXTOS['calc_menu_titulo_texto']}</h4>",
+        unsafe_allow_html=True)
+    submenu = st.radio("Menu da Calculadora",
+                       TEXTOS["calc_menu_opcoes"],
+                       horizontal=True,
+                       key="menu_radio",
+                       label_visibility="collapsed")
+    if submenu == "Variáveis":
+        show_calculator_variables()
+        return
+
+    st.markdown(
+        f"<h3 style='{TEXTOS['calc_titulo_style']}'>{TEXTOS['calc_titulo_texto']}</h3>",
+        unsafe_allow_html=True)
+
+    # --- Inputs ---
+    with st.container():
+        col1, col2 = st.columns(2)
+        with col1:
+            preco_ps = st.number_input(
+                "Preço do PS (por KG)",
+                min_value=0.0,
+                format="%.2f",
+                key="preco_ps")
+            quantidade_kg = st.number_input(
+                "Quantidade (KG)",
+                min_value=0.1,
+                format="%.2f",
+                key="quantidade_kg",
+                value=1.0)
+            valor_frete_kg = st.number_input(
+                "Valor do Frete (por KG)",
+                min_value=0.0,
+                format="%.2f",
+                key="valor_frete_kg")
+        with col2:
+            tem_limpeza = st.radio(
+                "Limpeza/Granulação?",
+                ["Não", "Sim"],
+                key="tem_limpeza",
+                horizontal=True)
+            valor_limpeza = st.number_input(
+                "Valor Limpeza/Gran. (por KG)",
+                min_value=0.0,
+                format="%.2f",
+                key="valor_limpeza") if tem_limpeza == "Sim" else 0.0
+
+            tem_laminacao = st.radio(
+                "Laminação?",
+                ["Não", "Sim"],
+                key="tem_laminacao",
+                horizontal=True)
+            valor_laminacao = st.number_input(
+                "Valor Laminação (por KG)",
+                min_value=0.0,
+                format="%.2f",
+                key="valor_laminacao") if tem_laminacao == "Sim" else 0.0
+
+            tem_ipi = st.radio(
+                "IPI?",
+                ["Não", "Sim"],
+                key="tem_ipi",
+                horizontal=True)
+            percent_ipi = st.number_input(
+                "% IPI",
+                min_value=0.0,
+                max_value=100.0,
+                format="%.1f",
+                key="percent_ipi") if tem_ipi == "Sim" else 0.0
+
+    st.divider()
+
+    if st.button(TEXTOS["calc_botao"], use_container_width=True):
+        try:
+            # Carrega pesos (kg) e perdas (fração)
+            peso_50 = float(get_calc_var("peso_50x50")) / 1000
+            perda_50 = float(get_calc_var("perda_50x50")) / 100
+            peso_30 = float(get_calc_var("peso_30x30")) / 1000
+            perda_30 = float(get_calc_var("perda_30x30")) / 100
+            peso_25 = float(get_calc_var("peso_25x25")) / 1000
+            perda_25 = float(get_calc_var("perda_25x25")) / 100
+
+            # Preço base/kg e preço do scrap tratado/kg
+            preco1 = preco_ps * (1 + percent_ipi/100) + valor_frete_kg
+            preco2 = preco1 + valor_limpeza + valor_laminacao
+
+            # Função auxiliar para custo da placa
+            def custo_placa(peso, perda):
+                if valor_limpeza > 0 or valor_laminacao > 0:
+                    # Reaproveita sucata (limpeza ou laminação)
+                    custo_kg_final = (1 - perda) * preco1 + perda * preco2
+                else:
+                    # Sucata perdida – ajusta pelo rendimento
+                    custo_kg_final = preco1 / (1 - perda)
+                return peso * custo_kg_final
+
+            # Calcula custos
+            custo_placa50 = custo_placa(peso_50, perda_50)
+            custo_placa30 = custo_placa(peso_30, perda_30)
+            custo_placa25 = custo_placa(peso_25, perda_25)
+
+            # Exibe resultado
+            st.metric("Custo Placa 50x50", f"R$ {custo_placa50:.4f}")
+            st.metric("Custo Placa 30x30", f"R$ {custo_placa30:.4f}")
+            st.metric("Custo Placa 25x25", f"R$ {custo_placa25:.4f}")
+
+        except Exception as e:
+            display_error(f"Erro no cálculo: {e}", e)
+    else:
+        st.subheader(TEXTOS["calc_resultado"])
+        st.info(TEXTOS["calc_info"])
 
 
 def calculate_cost(formula):
